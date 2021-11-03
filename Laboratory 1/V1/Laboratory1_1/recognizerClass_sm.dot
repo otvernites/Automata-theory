@@ -1,0 +1,76 @@
+digraph recognizerClass {
+
+    node
+        [shape=Mrecord width=1.5];
+
+    subgraph cluster_Map1 {
+
+        label="Map1";
+
+        //
+        // States (Nodes)
+        //
+
+        "Map1::Start"
+            [label="{Start}"];
+
+        "Map1::SName_state"
+            [label="{SName_state}"];
+
+        "Map1::FoldName_state"
+            [label="{FoldName_state}"];
+
+        "Map1::FileName_state"
+            [label="{FileName_state}"];
+
+        "Map1::OK"
+            [label="{OK}"];
+
+        "%start"
+            [label="" shape=circle style=filled fillcolor=black width=0.25];
+
+    }
+
+    //
+    // Transitions (Edges)
+    //
+
+    "Map1::Start" -> "Map1::Start"
+        [label="Letter/\l"];
+
+    "Map1::Start" -> "Map1::SName_state"
+        [label="Slash/\l"];
+
+    "Map1::Start" -> "Map1::Start"
+        [label="Whitespace/\l"];
+
+    "Map1::SName_state" -> "Map1::SName_state"
+        [label="Letter/\l"];
+
+    "Map1::SName_state" -> "Map1::FoldName_state"
+        [label="Slash/\l"];
+
+    "Map1::FoldName_state" -> "Map1::FoldName_state"
+        [label="Letter/\l"];
+
+    "Map1::FoldName_state" -> "Map1::FoldName_state"
+        [label="PointOrUnderline/\l"];
+
+    "Map1::FoldName_state" -> "Map1::OK"
+        [label="EOS/\l"];
+
+    "Map1::FoldName_state" -> "Map1::FileName_state"
+        [label="Slash/\l"];
+
+    "Map1::FileName_state" -> "Map1::FileName_state"
+        [label="Letter/\l"];
+
+    "Map1::FileName_state" -> "Map1::FileName_state"
+        [label="PointOrUnderline/\l"];
+
+    "Map1::FileName_state" -> "Map1::OK"
+        [label="EOS/\l"];
+
+    "%start" -> "Map1::Start"
+
+}

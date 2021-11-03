@@ -1,0 +1,60 @@
+%start Map1::Start
+%class recognizerClass
+%header   recognizerClass.h
+
+%map Map1
+%%
+// State		Transition			End State		Action(s)
+Start
+{
+				Letter(symb: char)	Start			{addSymb(symb);}	
+				Slash(symb: char)	SName_state		{addSymb(symb);}
+				Whitespace			Start			{}											
+
+}
+
+SName_state
+{	
+				Letter(symb: char)[(ctxt.serverNameLen())]	
+									SName_state		{}
+				Slash(symb: char)[(ctxt.numberOfSlashes())]	
+									FoldName_state	{addSymb(symb);}
+}
+
+FoldName_state
+{
+				Letter(symb: char)[(ctxt.directoryNameLen())]		
+									FoldName_state	{addSymb(symb);}
+				PointOrUnderline(symb: char)[(ctxt.directoryNameLen())]
+									FoldName_state	{addSymb(symb);}
+				EOS[(ctxt.fileNameLen())]				
+									OK				{addToTable(); Acceptable();}
+				Slash(symb: char)[(ctxt.numberOfSlashes())]		
+									FileName_state	{addSymb(symb);}
+}
+
+FileName_state
+{
+				Letter(symb: char)[(ctxt.fileNameLen())]		
+									FileName_state	{addSymb(symb);}
+				PointOrUnderline(symb: char)[(ctxt.fileNameLen())]	
+									FileName_state	{addSymb(symb);}
+				EOS[(ctxt.fileNameLen())]				
+									OK				{addToTable(); Acceptable();}
+}
+
+OK
+{}
+
+Default
+{
+				Whitespace			nil				{Unacceptable();}
+				Letter(symb: char)	nil				{Unacceptable();}
+				Slash(symb: char)	nil				{Unacceptable();}
+				PointOrUnderline(symb: char)	
+									nil				{Unacceptable();}
+				EOS					nil				{Unacceptable();}		
+				Unknown				nil				{Unacceptable();}
+}
+
+%%

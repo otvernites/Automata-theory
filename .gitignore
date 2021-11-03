@@ -1,0 +1,16 @@
+debug
+Debug
+.vs
+*.jar
+*.user
+*.sln
+*.filters
+*.vcxproj
+rsa2
+rsa2.pub
+.idea
+Release
+Lib
+Scripts
+pyvenv.cfg
+*.xml

@@ -1,0 +1,20 @@
+nfs://heLLo/world - - - true
+ nfs://where/is/id - - - true
+nfs://cooking.com/drink_ - - - false
+ f - - - false
+` - - - false
+nf*s://hello/world - - - false
+nfs://hello0/w_o_r_l_d/ - - - false
+ - - - false
+nfs:// - - - false
+nfs://dfkdk//kdkd - - - false
+nfs://jFFFjdjJsj/fjdj/kdkd - - - true
+nfs://hd/v.ideos_/hf.ru - - - true
+nfs://hd/v.i____jfdeos_/hf.ru - - - true
+kek - - - false
+
+ -----Statistics-----
+hf.ru - 2
+id - 1
+kdkd - 1
+world - 1
