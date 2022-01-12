@@ -1,4 +1,4 @@
-﻿#include "Lexer.h"
+#include "Lexer.h"
 
 namespace MyLib {
 	
