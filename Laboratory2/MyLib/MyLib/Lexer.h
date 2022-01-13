@@ -1,9 +1,9 @@
 #pragma once
 
+#include <iostream>
 #include "set"
 #include "vector"
 #include "string"
-#include <iostream>
 #include <sstream>
 #include <gvc.h>
 #include <cgraph.h>
@@ -19,7 +19,7 @@ namespace MyLib {
 		plus_node,
 		and_node,
 		or_node,
-		сapture_node,
+		capture_node,
 	};
 
 	class Node { // узел дерева
@@ -36,10 +36,15 @@ namespace MyLib {
 		Node* parent; 
 
 	public:
-		Node(std::string info, TypeOfNode node = TypeOfNode::unknown, int num = -1, bool isnull = false,
+		Node(std::string info = "", TypeOfNode node = TypeOfNode::unknown, int num = -1, bool isnull = false,
 			Node* l = nullptr, Node* r = nullptr, Node* p = nullptr) 
 				: left(l), right(r), parent(p), type(node), nullable(isnull) {
 			val = std::make_pair(num, info);
+		}
+
+		Node(const Node& node) : type(node.type), nullable(node.nullable), 
+			first(node.first), last(node.last), left(nullptr), right(nullptr), parent(nullptr) {
+			val = std::make_pair(-1, node.val.second);
 		}
 
 		void SetType(const TypeOfNode t) {
@@ -92,7 +97,7 @@ namespace MyLib {
 			case TypeOfNode::plus_node:    return "plus_node";
 			case TypeOfNode::and_node:     return "and_node";
 			case TypeOfNode::or_node:      return "or_node";
-			case TypeOfNode::сapture_node: return "capture_node";
+			case TypeOfNode::capture_node: return "capture_node";
 			default:					   return "";
 			};
 		}
@@ -128,8 +133,14 @@ namespace MyLib {
 		// список всех групп захвата + добавочна€ ф-ци€ к ParseRe, здесь объедин€ем группы захвата, если они были разными токенами
 		void CaptGroupDetecting(std::string str, std::vector<std::string>& numbers, std::vector<std::string>& tokens);
 
-		// установка зависимостей дл€ листов-групп захвата
-		void SetGroupLinks(std::vector<Node*>& capt_groups);
+		// копируем поддерево
+		Node* CopyBranch(Node* node);
+
+		// восстанавливаем группы захвата
+		void GroupPaste(std::vector<Node*>& capt_groups);
+
+		// восстанавливаем повтор€ющиес€ выражени€
+		void RepeatPaste(std::vector<Node*>& repeat_nodes);
 
 		// сам алгоритм построени€
 		void TreeAlgorithm(int br_count, std::vector<Node*>& syn_tree);
@@ -139,6 +150,8 @@ namespace MyLib {
 
 	public:
 		Lexer(Node* r = nullptr) : root(r) {}
+
+		Lexer& operator = (const Lexer& tree);
 
 		Node* GetRoot() const {
 			return this->root;

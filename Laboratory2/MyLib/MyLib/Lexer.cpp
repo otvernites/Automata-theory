@@ -64,6 +64,9 @@ namespace MyLib {
 					++i;
 					while (isdigit(str[i])) {
 						buf.push_back(str[i]);
+						if (std::stoi(buf) == 0) {
+							throw std::exception("Invalid expression ({0, })! Please enter the string again.");
+						}
 						buf.push_back(',');
 						++i;
 					}
@@ -193,46 +196,167 @@ namespace MyLib {
 		if (std::find(tokens.begin(), tokens.end(), "\\") != tokens.end()) { // когда метасимвол \\ используется не по назначению
 			throw std::exception("Invalid expression ( \\ )! Please enter the string again.");
 		}
-		
 	}
 
-	void Lexer::SetGroupLinks(std::vector<Node*>& capt_groups) {
+	Node* Lexer::CopyBranch(Node* node) {
+		Node* child_left = nullptr;
+		Node* child_right = nullptr;
+		if (node->GetLeft()) {
+			child_left = CopyBranch(node->GetLeft());
+		}
+		if (node->GetRight()) {
+			child_right = CopyBranch(node->GetRight());
+		}
+		Node* ptr = new Node(*node);
+		ptr->SetLeft(child_left);
+		if (child_left) {
+			child_left->SetParent(ptr);
+		}	
+		ptr->SetRight(child_right);
+		if (child_right) {
+			child_right->SetParent(ptr);
+		}
+		return ptr;
+	}
+
+	void Lexer::GroupPaste(std::vector<Node*>& capt_groups) {
 
 		std::vector<Node*>::iterator g_it = capt_groups.begin();
 		while (g_it != capt_groups.end()) { 
 
 			if ((*g_it)->GetRight() != nullptr) { // нашли здесь определение узла с группой захвата 
 
-				std::vector<Node*>::iterator current_node = g_it;
-				while (current_node != capt_groups.end()) { // пока находим вызов этой группы
-					current_node = find_if(capt_groups.begin(), capt_groups.end(),
-						[=](Node* p) {
-							return ((p->GetType() == TypeOfNode::сapture_node)) && 
-								((p->GetVal().second) == ("\\" + (*g_it)->GetVal().second));
-						});
-
-					if ((current_node != capt_groups.end()) && ((*g_it)->GetType() != TypeOfNode::unknown)) {
-						(*current_node)->SetLeft((*g_it)->GetLeft()); // установка связей
-						(*current_node)->SetRight((*g_it)->GetRight());
-
-						(*current_node)->SetType(TypeOfNode::unknown);		 // мб так делать нельзя?	
+				std::vector<Node*>::iterator it; 
+				
+				for (it = capt_groups.begin(); it != capt_groups.end(); it++) {
+					if ((*it)->GetVal().second == ("\\" + (*g_it)->GetVal().second)) {
+						//копирование
+						(*it)->SetRight(CopyBranch((*g_it)->GetRight()));
 					}
 				}
 			}
 			++g_it;
 		}
+	}	
 
-		/*
-		каждый раз при нахождении узла группы захвата без потомков, 
-		извлекать из вектора родителя! */
+	void Lexer::RepeatPaste(std::vector<Node*>& repeat_g) {
 
-		// как оно поймет, что с чем связывать? если ты никак не перенесешь это и удалишь указатели
-		// если искать в векторе node*, то придется писать перегруженный оператор сравнения 
+		std::vector<Node*>::iterator g_it;
+		for (g_it = repeat_g.begin(); g_it != repeat_g.end(); ++g_it) {
+			std::string str = (*g_it)->GetVal().second;
+			int value = std::atoi(str.c_str()); //тут лежит первое число
+			// {X}
+			if (str[str.size() - 1] == ',') {
+				if ((*g_it)->GetParent()->GetLeft() == *g_it) { // если левое поддерево
+					if (value == 1) { // если повторяем один раз, то просто новые связи
+						(*g_it)->GetParent()->SetLeft((*g_it)->GetLeft()); // родителю установила
+						(*g_it)->GetLeft()->SetParent((*g_it)->GetParent()); // потомку установила
+						delete* (g_it); //
+					}
+					else {
+						Node* tmp = (*g_it)->GetParent();
+						while (value != 1) {
+							Node* oper = new Node("*", TypeOfNode::and_node);
+							oper->SetParent(tmp);
+							tmp->SetLeft(oper);
+							oper->SetRight(CopyBranch((*g_it)->GetLeft()));
+							--value;
+							tmp = oper;
+						}
+						tmp->SetLeft(CopyBranch((*g_it)->GetLeft()));
+						delete* g_it; // 
+					}
+				}
+				else if ((*g_it)->GetParent()->GetRight() == *g_it) { // если правое поддерево
+					if (value == 1) { // если повторяем один раз, то просто новые связи
+						(*g_it)->GetParent()->SetRight((*g_it)->GetRight()); // родителю установила
+						(*g_it)->GetRight()->SetParent((*g_it)->GetParent()); // потомку установила
+						delete* g_it; //
+					}
+					else {
+						Node* tmp = (*g_it)->GetParent();
+						while (value != 1) {
+							Node* oper = new Node("*", TypeOfNode::and_node);
+							oper->SetParent(tmp);
+							tmp->SetRight(oper);
+							oper->SetRight(CopyBranch((*g_it)->GetLeft()));
+							--value;
+							tmp = oper;
+						}
+						tmp->SetLeft(CopyBranch((*g_it)->GetLeft()));
+						delete* g_it; // 
+					}
+				}
+			}
+			// {X, +}
+			else if (str[str.size() - 1] == '+') {
+				if ((*g_it)->GetParent()->GetLeft() == *g_it) { // если левое поддерево
+					if (value != 1) { // 
+						Node* tmp = (*g_it)->GetParent();
+						Node* oper = new Node("*", TypeOfNode::and_node);
+						oper->SetParent(tmp);
+						tmp->SetLeft(oper);
+						oper->SetRight(CopyBranch((*g_it)));
+						oper->GetRight()->SetVal(std::make_pair(-1, "+"));
+						--value;
+						tmp = oper;
+
+						while (value != 1) {
+							oper = new Node("*", TypeOfNode::and_node);
+							oper->SetParent(tmp);
+							tmp->SetLeft(oper);
+							oper->SetRight(CopyBranch((*g_it)->GetLeft()));
+							--value;
+							tmp = oper;
+						}
+						tmp->SetLeft(CopyBranch((*g_it)->GetLeft()));
+						delete* g_it; // 
+					}
+					else { // если повторяем один раз, то просто меняем вид {1,+} на +
+						(*g_it)->SetVal(std::make_pair(-1, "+"));
+					}
+				}
+				else if ((*g_it)->GetParent()->GetRight() == *g_it) { // если правое поддерево
+					if (value != 1) { // если повторяем один раз, то просто оставляем
+						Node* tmp = (*g_it)->GetParent();
+						Node* oper = new Node("*", TypeOfNode::and_node);
+						oper->SetParent(tmp);
+						tmp->SetRight(oper);
+						oper->SetRight(CopyBranch((*g_it)));
+						oper->GetRight()->SetVal(std::make_pair(-1, "+"));
+						--value;
+						tmp = oper;
+						
+						while (value != 1) {
+							oper = new Node("*", TypeOfNode::and_node);
+							oper->SetParent(tmp);
+							tmp->SetRight(oper);
+							oper->SetRight(CopyBranch((*g_it)->GetLeft()));
+							--value;
+							tmp = oper;
+						}
+						tmp->SetLeft(CopyBranch((*g_it)->GetLeft()));
+						delete* g_it; // 
+					}
+					else { // если повторяем один раз, то просто меняем вид {1,+} на +
+						(*g_it)->SetVal(std::make_pair(-1, "+"));
+					}
+				}
+			}
+						/*// {X, Y}
+			else {
+
+			}
+			*/
+			//++g_it;
+
+		}
 	}
 
 	void Lexer::TreeAlgorithm(int br_count, std::vector<Node*>& syn_tree) {
 
 		std::vector<Node*> capt_g; // вектор для хранения указателей на группы захвата
+		std::vector<Node*> repeat_g; // вектор для хранения указателей на группы повтора
 
 		// следуем алгоритму
 		std::vector<Node*>::reverse_iterator l_bracket; // левая скобочка
@@ -254,7 +378,7 @@ namespace MyLib {
 			for (auto it = l_bracket.base(); (*it)->GetVal().second != ")"; ++it) {
 				std::string current_symb = (*it)->GetVal().second;
 				if ((current_symb[0] == '\\') && (current_symb.size() > 1) && (*it)->GetType() == TypeOfNode::unknown) { // если вызывается группа захвата
-					(*it)->SetType(TypeOfNode::сapture_node);
+					(*it)->SetType(TypeOfNode::capture_node);
 					capt_g.push_back(*it); // добавили вызов группы захвата в вектор
 				}
 				else if (((current_symb.size() == 1) && (!metacharacters.contains(current_symb[0])) ||
@@ -276,6 +400,8 @@ namespace MyLib {
 
 					(*it)->SetType(TypeOfNode::plus_node);
 					(*it)->SetVal(std::make_pair((*it)->GetVal().first, current_symb));
+
+					repeat_g.push_back(*it);
 
 					it = syn_tree.erase(it - 1);
 
@@ -338,7 +464,7 @@ namespace MyLib {
 					(*it)->SetRight(*(it + 1));
 					(*(it + 1))->SetParent(*it);
 
-					(*it)->SetType(TypeOfNode::сapture_node);
+					(*it)->SetType(TypeOfNode::capture_node);
 					(*it)->SetVal(std::make_pair((*it)->GetVal().first, current_symb.substr(1)));
 
 					capt_g.push_back(*it); // добавили в вектор ноду группы захвата
@@ -356,13 +482,11 @@ namespace MyLib {
 			--br_count;
 		} while (br_count != 0);
 
-		this->SetGroupLinks(capt_g); // устанавливаем недостающие связи для групп захвата
+		this->GroupPaste(capt_g); // дорисовываем группы захвата при вызове
+		capt_g.clear(); // очищаем временный вектор
 
-		// очищаем временный вектор
-		for (auto it = capt_g.begin(); it != capt_g.end(); ++it) {
-			delete *it;
-		}
-		capt_g.clear();
+		this->RepeatPaste(repeat_g); // дорисовываем повторения при вызове
+		repeat_g.clear();
 	}
 
 	void Lexer::Re2Tree(std::string& str) { // строим дерево, следуя алгоритму
@@ -425,7 +549,7 @@ namespace MyLib {
 		Agraph_t* g = agmemread(buffer.str().c_str());
 		GVC_t* gvc = gvContext();
 		gvLayout(gvc, g, "dot");
-		gvRenderFilename(gvc, g, "png", "C:\\Users\\Asus\\Desktop\\Теория автоматов\\Laboratory2\\MyLib\\MyLib\\test.png");
+		gvRenderFilename(gvc, g, "png", ".\\test.png");
 		gvFreeLayout(gvc, g);
 		agclose(g);
 		gvFreeContext(gvc);
