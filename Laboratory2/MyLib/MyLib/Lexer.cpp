@@ -90,6 +90,10 @@ namespace MyLib {
 						vec.push_back(buf);
 						buf.clear();
 					}
+					else if ((IsNumber(str.substr(i + 1, closest_pair.second - i - 1))) &&
+						(std::stoi(str.substr(closest_pair.first + 1, i - closest_pair.first - 1)) >= std::stoi(str.substr(i + 1, closest_pair.second - i - 1)))) {
+						throw std::exception("Invalid expression ({number,lesser number})! Please enter the string again.");
+					}
 					else { // встретили букву или что-то другое
 						i = closest_pair.first;
 						vec.push_back(std::string(1, str[i]));
@@ -239,118 +243,307 @@ namespace MyLib {
 		}
 	}	
 
-	void Lexer::RepeatPaste(std::vector<Node*>& repeat_g) {
+	void Lexer::DeleteSubtree(Node* root) {
+		if (root->GetLeft()) {
+			DeleteSubtree(root->GetLeft());
+		}
+		if (root->GetRight()) {
+			DeleteSubtree(root->GetRight());
+		}
+		delete root;
+	}
 
+	Node* Lexer::EmbedGroup(int value, const std::vector<Node*>::iterator& g_it) {
+		Node* tmp = nullptr;
+		Node* root = nullptr;
+		Node* oper = nullptr;
+		while (value != 1) { 
+			oper = new Node("*", TypeOfNode::and_node);
+			oper->SetLeft(CopyBranch((*g_it)->GetLeft())); // т.к. операция +, то копируем содержимое слева
+			if (tmp) {
+				oper->SetParent(tmp);
+				tmp->SetRight(oper);
+			}
+			else {
+				root = oper;
+			}
+			tmp = oper;
+			--value;
+		}
+		// дерево строили сверху вниз, корень прилепляем к началу
+		if ((*g_it)->GetParent()->GetLeft() == (*g_it)) { // g_it - plus_node, на его место вставляем 
+			(*g_it)->GetParent()->SetLeft(root);
+			root->SetParent((*g_it));
+			DeleteSubtree(*g_it); // здесь remove g_it и его потомков 
+		}
+		else if ((*g_it)->GetParent()->GetRight() == (*g_it)) {
+			(*g_it)->GetParent()->SetRight(root);
+			root->SetParent((*g_it));
+			DeleteSubtree(*g_it); // здесь remove g_it и его потомков 
+		}
+		// в этой функции правого потомка для последнего узла не устанавливаем!
+		return oper;
+	}
+
+	Node* Lexer::EmbedGroup(int value, Node* node, Node* origin) {
+		Node* tmp = nullptr;
+		Node* root = nullptr;
+		Node* oper = nullptr;
+		while (value != 1) {
+			oper = new Node("*", TypeOfNode::and_node);
+			oper->SetLeft(CopyBranch(origin));
+			if (tmp) {
+				oper->SetParent(tmp);
+				tmp->SetRight(oper);
+			}
+			else {
+				root = oper;
+			}
+			tmp = oper;
+			--value;
+		}
+		oper->SetRight(CopyBranch(origin));
+		node->SetLeft(root);
+		root->SetParent(node);
+		
+		return oper;
+	}
+
+	void Lexer::RepeatPaste(std::vector<Node*>& repeat_g) {
 		std::vector<Node*>::iterator g_it;
 		for (g_it = repeat_g.begin(); g_it != repeat_g.end(); ++g_it) {
 			std::string str = (*g_it)->GetVal().second;
 			int value = std::atoi(str.c_str()); //тут лежит первое число
+
+			Node* value_to_copy = CopyBranch(*g_it);
+
 			// {X}
 			if (str[str.size() - 1] == ',') {
-				if ((*g_it)->GetParent()->GetLeft() == *g_it) { // если левое поддерево
-					if (value == 1) { // если повторяем один раз, то просто новые связи
-						(*g_it)->GetParent()->SetLeft((*g_it)->GetLeft()); // родителю установила
-						(*g_it)->GetLeft()->SetParent((*g_it)->GetParent()); // потомку установила
+				if (value != 1) { // повторить несколько раз
+					Node* oper = EmbedGroup(value, g_it);
+					oper->SetRight(CopyBranch(value_to_copy->GetLeft()));
+				}
+				else { // когда нужно повторить 1 раз
+					if ((*g_it)->GetParent()->GetLeft() == (*g_it)) {
+						(*g_it)->GetParent()->SetLeft((*g_it)->GetLeft());
+						(*g_it)->GetLeft()->SetParent((*g_it)->GetParent());
 						delete* (g_it); //
 					}
 					else {
-						Node* tmp = (*g_it)->GetParent();
-						while (value != 1) {
-							Node* oper = new Node("*", TypeOfNode::and_node);
-							oper->SetParent(tmp);
-							tmp->SetLeft(oper);
-							oper->SetRight(CopyBranch((*g_it)->GetLeft()));
-							--value;
-							tmp = oper;
-						}
-						tmp->SetLeft(CopyBranch((*g_it)->GetLeft()));
-						delete* g_it; // 
+						(*g_it)->GetParent()->SetRight((*g_it)->GetLeft());
+						(*g_it)->GetLeft()->SetParent((*g_it)->GetParent());
+						delete* (g_it); //
 					}
 				}
-				else if ((*g_it)->GetParent()->GetRight() == *g_it) { // если правое поддерево
-					if (value == 1) { // если повторяем один раз, то просто новые связи
-						(*g_it)->GetParent()->SetRight((*g_it)->GetRight()); // родителю установила
-						(*g_it)->GetRight()->SetParent((*g_it)->GetParent()); // потомку установила
-						delete* g_it; //
+			}
+			// {X,+}
+			else if (str[str.size() - 1] == '+') {
+				if (value != 1) { //
+					Node* oper = EmbedGroup(value, g_it);
+					oper->SetRight(CopyBranch(value_to_copy));
+					oper->GetRight()->SetVal(std::make_pair(-1, "+"));
+				}
+				else { // если повторяем один раз, то просто меняем вид {1,+} на +
+					(*g_it)->SetVal(std::make_pair(-1, "+"));
+				}
+			}
+			// {X,Y}
+			else {
+				while (isdigit(str[0])) {
+					str.erase(0, 1);
+				}
+				str.erase(0, 1);
+				int max_value = std::stoi(str.c_str()); //тут лежит первое число
+				int delta = max_value - value;
+
+				Node* oper = EmbedGroup(value + 1, g_it); // это рут (операция И), мы уже построили И, с него начинаем вправо строить ИЛИ
+				Node* copy_val = oper->GetLeft();
+
+				while (delta != 1) {
+					Node* or_node = new Node("|", TypeOfNode::or_node);
+					oper->SetRight(or_node);
+					or_node->SetParent(oper);
+					EmbedGroup(delta, or_node, copy_val); // здесь как-то надо наспамить, вставляем в левое поддерево or_node
+					--delta;
+					oper = or_node;
+				}
+				
+				Node* or_node = new Node("|", TypeOfNode::or_node);
+				oper->SetRight(or_node);
+				or_node->SetParent(oper);
+
+				or_node->SetLeft(CopyBranch(copy_val));
+				Node* eps = new Node("^", TypeOfNode::a_node);
+				or_node->SetRight(eps);
+			}
+			DeleteSubtree(value_to_copy);
+		}
+		
+				/*
+				while (delta != 0) {
+
+				}
+
+
+				Node* 
+				std::cout << "hi" << std::endl;
+
+				Node* tmp1 = nullptr;
+				Node* root1 = nullptr;
+				Node* oper1 = nullptr;
+				while (value != 1) {
+					oper1 = new Node("*", TypeOfNode::and_node);
+					oper1->SetLeft(CopyBranch((*g_it)->GetLeft()));
+					if (tmp1) {
+						oper1->SetParent(tmp1);
+						tmp1->SetRight(oper1);
 					}
 					else {
-						Node* tmp = (*g_it)->GetParent();
-						while (value != 1) {
+						root1 = oper1;
+					}
+					tmp1 = oper1;
+					--value;
+				}
+				if ((*g_it)->GetParent()->GetLeft() == (*g_it)) {
+					(*g_it)->GetParent()->SetLeft(root1);
+					root1->SetParent((*g_it));
+					// здесь remove g_it и его потомков 
+				}
+				if ((*g_it)->GetParent()->GetRight() == (*g_it)) {
+					(*g_it)->GetParent()->SetRight(root1);
+					root1->SetParent((*g_it));
+					// здесь remove g_it и его потомков 
+				}
+
+				//oper->SetRight(CopyBranch((*g_it)->GetLeft()));
+
+				//Node* oper = EmbedGroup(value, g_it, 0);
+				//Node* tail = EmbedGroup(delta, g_it, 1);
+				//tail->SetRight((*g_it));
+
+				
+
+
+				//oper->SetRight(CopyBranch((*g_it)->GetLeft()));
+
+			}
+		}
+
+		/*
+		void Lexer::RepeatPaste(std::vector<Node*>& repeat_g) {
+
+			std::vector<Node*>::iterator g_it;
+			for (g_it = repeat_g.begin(); g_it != repeat_g.end(); ++g_it) {
+				std::string str = (*g_it)->GetVal().second;
+				int value = std::atoi(str.c_str()); //тут лежит первое число
+				// {X}
+				if (str[str.size() - 1] == ',') {
+					if ((*g_it)->GetParent()->GetLeft() == *g_it) { // если левое поддерево
+						if (value == 1) { // если повторяем один раз, то просто новые связи
+							(*g_it)->GetParent()->SetLeft((*g_it)->GetLeft()); // родителю установила
+							(*g_it)->GetLeft()->SetParent((*g_it)->GetParent()); // потомку установила
+							delete* (g_it); //
+						}
+						else {
+							Node* tmp = (*g_it)->GetParent();
+							while (value != 1) {
+								Node* oper = new Node("*", TypeOfNode::and_node);
+								oper->SetParent(tmp);
+								tmp->SetLeft(oper);
+								oper->SetRight(CopyBranch((*g_it)->GetLeft()));
+								--value;
+								tmp = oper;
+							}
+							tmp->SetLeft(CopyBranch((*g_it)->GetLeft()));
+							delete* g_it; //
+						}
+					}
+					else if ((*g_it)->GetParent()->GetRight() == *g_it) { // если правое поддерево
+						if (value == 1) { // если повторяем один раз, то просто новые связи
+							(*g_it)->GetParent()->SetRight((*g_it)->GetLeft()); // родителю установила
+							(*g_it)->GetLeft()->SetParent((*g_it)->GetParent()); // потомку установила
+							delete* g_it; //
+						}
+						else {
+							Node* tmp = (*g_it)->GetParent();
+							while (value != 1) {
+								Node* oper = new Node("*", TypeOfNode::and_node);
+								oper->SetParent(tmp);
+								tmp->SetRight(oper);
+								oper->SetLeft(CopyBranch((*g_it)->GetLeft()));
+								--value;
+								tmp = oper;
+							}
+							tmp->SetRight(CopyBranch((*g_it)->GetLeft()));
+							delete* g_it; //
+						}
+					}
+				}
+				// {X, +}
+				else if (str[str.size() - 1] == '+') {
+					if ((*g_it)->GetParent()->GetLeft() == *g_it) { // если левое поддерево
+						if (value != 1) { //
+							Node* tmp = (*g_it)->GetParent();
+							Node* oper = new Node("*", TypeOfNode::and_node);
+							oper->SetParent(tmp);
+							tmp->SetLeft(oper);
+							oper->SetRight(CopyBranch((*g_it)));
+							oper->GetRight()->SetVal(std::make_pair(-1, "+"));
+							--value;
+							tmp = oper;
+
+							while (value != 1) {
+								oper = new Node("*", TypeOfNode::and_node);
+								oper->SetParent(tmp);
+								tmp->SetLeft(oper);
+								oper->SetRight(CopyBranch((*g_it)->GetLeft()));
+								--value;
+								tmp = oper;
+							}
+							tmp->SetLeft(CopyBranch((*g_it)->GetLeft()));
+							delete* g_it; //
+						}
+						else { // если повторяем один раз, то просто меняем вид {1,+} на +
+							(*g_it)->SetVal(std::make_pair(-1, "+"));
+						}
+					}
+					else if ((*g_it)->GetParent()->GetRight() == *g_it) { // если правое поддерево
+						if (value != 1) { // если повторяем один раз, то просто оставляем
+							Node* tmp = (*g_it)->GetParent();
 							Node* oper = new Node("*", TypeOfNode::and_node);
 							oper->SetParent(tmp);
 							tmp->SetRight(oper);
-							oper->SetRight(CopyBranch((*g_it)->GetLeft()));
+							oper->SetRight(CopyBranch((*g_it)));
+							oper->GetRight()->SetVal(std::make_pair(-1, "+"));
 							--value;
 							tmp = oper;
+
+							while (value != 1) {
+								oper = new Node("*", TypeOfNode::and_node);
+								oper->SetParent(tmp);
+								tmp->SetRight(oper);
+								oper->SetRight(CopyBranch((*g_it)->GetLeft()));
+								--value;
+								tmp = oper;
+							}
+							tmp->SetLeft(CopyBranch((*g_it)->GetLeft()));
+							delete* g_it; //
 						}
-						tmp->SetLeft(CopyBranch((*g_it)->GetLeft()));
-						delete* g_it; // 
+						else { // если повторяем один раз, то просто меняем вид {1,+} на +
+							(*g_it)->SetVal(std::make_pair(-1, "+"));
+						}
 					}
 				}
-			}
-			// {X, +}
-			else if (str[str.size() - 1] == '+') {
-				if ((*g_it)->GetParent()->GetLeft() == *g_it) { // если левое поддерево
-					if (value != 1) { // 
-						Node* tmp = (*g_it)->GetParent();
-						Node* oper = new Node("*", TypeOfNode::and_node);
-						oper->SetParent(tmp);
-						tmp->SetLeft(oper);
-						oper->SetRight(CopyBranch((*g_it)));
-						oper->GetRight()->SetVal(std::make_pair(-1, "+"));
-						--value;
-						tmp = oper;
+							// {X, Y}
+				else {
 
-						while (value != 1) {
-							oper = new Node("*", TypeOfNode::and_node);
-							oper->SetParent(tmp);
-							tmp->SetLeft(oper);
-							oper->SetRight(CopyBranch((*g_it)->GetLeft()));
-							--value;
-							tmp = oper;
-						}
-						tmp->SetLeft(CopyBranch((*g_it)->GetLeft()));
-						delete* g_it; // 
-					}
-					else { // если повторяем один раз, то просто меняем вид {1,+} на +
-						(*g_it)->SetVal(std::make_pair(-1, "+"));
-					}
 				}
-				else if ((*g_it)->GetParent()->GetRight() == *g_it) { // если правое поддерево
-					if (value != 1) { // если повторяем один раз, то просто оставляем
-						Node* tmp = (*g_it)->GetParent();
-						Node* oper = new Node("*", TypeOfNode::and_node);
-						oper->SetParent(tmp);
-						tmp->SetRight(oper);
-						oper->SetRight(CopyBranch((*g_it)));
-						oper->GetRight()->SetVal(std::make_pair(-1, "+"));
-						--value;
-						tmp = oper;
-						
-						while (value != 1) {
-							oper = new Node("*", TypeOfNode::and_node);
-							oper->SetParent(tmp);
-							tmp->SetRight(oper);
-							oper->SetRight(CopyBranch((*g_it)->GetLeft()));
-							--value;
-							tmp = oper;
-						}
-						tmp->SetLeft(CopyBranch((*g_it)->GetLeft()));
-						delete* g_it; // 
-					}
-					else { // если повторяем один раз, то просто меняем вид {1,+} на +
-						(*g_it)->SetVal(std::make_pair(-1, "+"));
-					}
-				}
-			}
-						/*// {X, Y}
-			else {
+
+				//++g_it;
 
 			}
-			*/
-			//++g_it;
-
 		}
+		*/
 	}
 
 	void Lexer::TreeAlgorithm(int br_count, std::vector<Node*>& syn_tree) {
@@ -482,10 +675,10 @@ namespace MyLib {
 			--br_count;
 		} while (br_count != 0);
 
-		this->GroupPaste(capt_g); // дорисовываем группы захвата при вызове
+		GroupPaste(capt_g); // дорисовываем группы захвата при вызове
 		capt_g.clear(); // очищаем временный вектор
 
-		this->RepeatPaste(repeat_g); // дорисовываем повторения при вызове
+		RepeatPaste(repeat_g); // дорисовываем повторения при вызове
 		repeat_g.clear();
 	}
 
@@ -504,7 +697,7 @@ namespace MyLib {
 		}
 
 		std::vector<std::string> group_nums; // здесь лежат все номера для групп захвата
-		this->CaptGroupDetecting(str, group_nums, tok_vec); // для построения СД получим номера всех групп захвата + объединяем разъед. токены
+		CaptGroupDetecting(str, group_nums, tok_vec); // для построения СД получим номера всех групп захвата + объединяем разъед. токены
 		group_nums.clear();
 		
 		std::vector<Node*> syn_tree; // вектор нодов для построения СД 
@@ -514,8 +707,8 @@ namespace MyLib {
 		}
 		tok_vec.clear();
 
-		this->TreeAlgorithm(open_br_count, syn_tree); 
-		this->SetRoot(syn_tree[0]);
+		TreeAlgorithm(open_br_count, syn_tree); 
+		SetRoot(syn_tree[0]);
 	}
 
 	void Lexer::PrintNode(const Node* root, std::ostringstream& buffer, int id) {
@@ -543,7 +736,7 @@ namespace MyLib {
 		std::ostringstream buffer("", std::ios_base::ate);
 
 		buffer << "digraph G {\n";
-		PrintNode(this->GetRoot(), buffer, 1);
+		PrintNode(GetRoot(), buffer, 1);
 		buffer << "}";
 
 		Agraph_t* g = agmemread(buffer.str().c_str());

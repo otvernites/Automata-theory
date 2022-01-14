@@ -7,12 +7,25 @@ namespace MyLib {
 	class DFA: public Lexer {
 
 	private:
+		std::vector<std::set<int>> follow_pos; // множество следующих позиций
 
-		// нумерация символов алфавита
-		void Numbering(Node* root);
+		// Нумерация символов алфавита
+		void Numbering(Node* node);
 
 		// Проверить обнуляемость 
-		void FindNullable(Node* root);
+		void FindNullable(Node* node);
+
+		// Построить множества первых позиций
+		void FindFirst(Node* node);
+
+		// Построить множество последних позиций
+		void FindLast(Node* node);
+
+		// Построить множество следующих позиций
+		void FindFollowPos(Node* node);
+
+		// Для одновременного построения множеств 
+		void TreeTraversal(Node* root);
 
 	public:
 
