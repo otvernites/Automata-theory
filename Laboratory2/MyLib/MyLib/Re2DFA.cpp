@@ -11,15 +11,15 @@ namespace MyLib {
 
 		if (flag < INT_MAX) {
 
-			// левая рекурсия
+			// Р»РµРІР°СЏ СЂРµРєСѓСЂСЃРёСЏ
 			Numbering(root->GetLeft());
 
-			// правая рекурсия
+			// РїСЂР°РІР°СЏ СЂРµРєСѓСЂСЃРёСЏ
 			Numbering(root->GetRight());
 
 			++flag;
 
-			// устанавливаем значение для a-node
+			// СѓСЃС‚Р°РЅР°РІР»РёРІР°РµРј Р·РЅР°С‡РµРЅРёРµ РґР»СЏ a-node
 			if (root->GetType() == TypeOfNode::a_node) {
 				root->SetNum(flag);
 			}
@@ -135,10 +135,10 @@ namespace MyLib {
 
 	void DFA::Re2DFA(Node* root) {
 
-		// 1 шаг - нумерация символов алфавита
+		// 1 С€Р°Рі - РЅСѓРјРµСЂР°С†РёСЏ СЃРёРјРІРѕР»РѕРІ Р°Р»С„Р°РІРёС‚Р°
 		Numbering(root);
 
-		// 2 шаг - N, F, L, FP
+		// 2 С€Р°Рі - N, F, L, FP
 		TreeTraversal(root);
 
 	}
