@@ -3,7 +3,7 @@
 
 namespace MyLib {
 
-	inline std::set<char> metacharacters = { '#', '^', '|', '.', '+', '{', '}', '(', ')', '\\' };
+	inline std::set<char> metacharacters = { '#', '|', '.', '+', '{', '}', '(', ')', '\\'};
 
 	class Lexer { // синтаксическое дерево
 	private:
@@ -44,6 +44,10 @@ namespace MyLib {
 
 	public:
 		Lexer(Node* r = nullptr) : root(r) {}
+
+		~Lexer() {
+			DeleteSubtree(root);
+		}
 
 		Lexer& operator = (const Lexer& tree);
 
