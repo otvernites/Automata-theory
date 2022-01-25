@@ -128,6 +128,9 @@ namespace MyLib {
 				}
 
 			default:
+				if (literal == '.') {
+					continue;
+				}
 				vec.push_back(std::string(1, literal));
 			}
 		}
@@ -420,7 +423,7 @@ namespace MyLib {
 			while (current_symb != ")") {
 				current_symb = (*it)->GetVal().second;
 
-				if (((it - 1) != syn_tree.end()) && (current_symb.find(",") != std::string::npos) && ((*(it - 1))->GetType() != TypeOfNode::unknown) && (current_symb.size() > 1)) { // если это токен повторений { }, предыдущий -  нод, а текущий "+"
+				if (((it - 1) != syn_tree.end()) && (current_symb.find(",") != std::string::npos) && ((*(it - 1))->GetType() != TypeOfNode::unknown) && (current_symb.size() > 1) && ((*it)->GetLeft() == nullptr)) { // если это токен повторений { }, предыдущий -  нод, а текущий "+"
 
 					(*it)->SetLeft(*(it - 1));
 					(*(it - 1))->SetParent(*it);
@@ -519,9 +522,8 @@ namespace MyLib {
 	void Lexer::Re2Tree(std::string& str) { // строим дерево, следуя алгоритму
 
 		str = "((" + str + ")$" + ')';
-		while (str.find(' ') != std::string::npos) { // удалим все пробелы, чтобы они нам не мешали (их заменяет эпсилон-символ)
-			str.erase(str.find(' '), 1);
-		}
+		str.erase(remove(str.begin(), str.end(), ' '), str.end());
+		str.erase(remove(str.begin(), str.end(), '\t'), str.end());
 
 		std::vector<std::string> tok_vec; // вектор, куда будем отправлять токены (очистить его после заполнения второго вектора)
 		ParseRe(str, tok_vec); // парсим токены в вектор

@@ -147,7 +147,8 @@ namespace MyLib {
 		}
 	}
 	// ----
-
+	
+	// ----
 	void DFA::CreatingStates(std::unordered_map<int, std::string>& pos_map, std::vector<std::set<int>>& follow_pos) { // pos_map - не для всех a_node
 		// создаем нулевое состояние																					// follow_pos для всех
 		State* empty_state = new State();
@@ -226,8 +227,158 @@ namespace MyLib {
 		follow_pos.clear();
 	} 
 
+	bool DFA::IsDiffGroups(std::vector<std::set<State*>>& groups, State* first_state, State* second_state, std::string symb) {
+		bool flag = false; // одинаковые группы
+		for (auto& group : groups) {
+			for (auto state : group) {
+				if (first_state->transitions[symb] == state) { // если я нашла группу, в которую переходит из первого состояния
+					auto it = group.find(second_state->transitions[symb]); // проверяю, в этой же группе переход для второго состояния
+					if (it == group.end()) { // разные группы
+						flag = true;
+						return flag;
+					}
+				}
+			}
+		}
+		return flag;
+	}
+
 	void DFA::DFAMinimization() {
 
+		std::vector<std::set<State*>> split_groups; // П, вектор множеств состояний, которые мы потом объединим в одно (изменяем)
+				
+		split_groups.push_back(accepting_states); // добавили туда множество принимающих
+		split_groups.push_back(std::set<State*>());  // и множество оставшихся (S - F)
+		for (auto state : states) { 
+			if (!accepting_states.contains(state)) {
+				split_groups[1].insert(state);
+			}
+		}
+		
+		std::vector<std::set<State*>> split_groups_copy; // П, вектор для сравнения с первичным (его не изменяем)
+		while (split_groups_copy != split_groups) {
+
+			split_groups_copy = split_groups;
+
+			// основная часть, разбиваю каждую группу на подгруппы
+			std::vector<std::set<State*>>::iterator group_it = split_groups.begin();
+			int group_num = 0;
+			while (group_it != split_groups.end()) {
+				if ((*group_it).size() > 1) { // если в группе больше одного состояния
+
+					std::set<State*>::iterator state_it = (*group_it).begin(); // итератор по множ-ву (для первого сост)
+					std::set<State*>::iterator other_states_it = state_it; //  итератор по тому же множ-ву (для второго сост)
+
+					std::set<State*> new_group; // создаем группу для разделения
+					while (state_it != (*group_it).end()) { // для каждого состояния в группе (первое)
+
+						while (other_states_it != (*group_it).end()) { // проходимся по всем состояниям (второе)
+							if (state_it == other_states_it) {
+								++other_states_it;
+								continue;
+							}
+							else {
+								for (auto& symb : alphabet) {  // проходимся по всем символам алфавита
+									if (IsDiffGroups(split_groups, *state_it, *other_states_it, symb)) { // если группы разные, нужно разделять 
+										new_group.insert(*other_states_it);
+										other_states_it = (*group_it).erase(other_states_it);
+
+										// если оно находится в самом начале, при сдвиге влево будет end, дальше не проверит
+										if ((other_states_it != (*group_it).begin()) && (other_states_it != (*group_it).end())) {
+											--other_states_it;
+										}
+										break;
+									}
+								}
+								if (other_states_it != (*group_it).end()) {
+									++other_states_it;
+								}
+							}
+						}
+						
+						if (new_group.size() != 0) {
+							// вставляю для одного символа группу найденных отличающихся
+							int counter = std::distance((*group_it).begin(), state_it);
+							split_groups.insert(split_groups.end(), new_group); // из-за этого итераторы state_it и group_it сбиваются
+							group_it = split_groups.begin() + group_num;
+							state_it = (*group_it).begin();
+							std::advance(state_it, counter);
+							other_states_it = state_it;
+							new_group.clear();
+						}
+
+						++state_it; //перехожу к след состоянию
+					}
+				}
+				++group_num;
+				++group_it; // перехожу к след группе
+			}
+		}
+		split_groups_copy.clear();
+
+		// ---------- теперь выбираем представителей для состояний !!! ----------
+
+		std::map<State*, int> from_which_group; // каждому номеру группы в соответствие ставится состояние
+		std::vector<State*> main_states;  //каждой группе в соответствие ставим представителя
+		int group_num = 0;
+		for (auto& states : split_groups) {
+			for (auto state : states) {
+				from_which_group.insert(std::make_pair(state, group_num));
+			}
+			main_states.push_back(*states.begin());
+			++group_num;
+		}
+		
+		// каждая группа - новое состояние, объединяет в себе несколько состояний
+		group_num = 0;
+		for (auto& group : split_groups) { // для каждой группы
+			std::set<std::string> symbols = alphabet;
+			for (auto state : group) { // для каждого состояния в группе
+
+				if (state == start) { // установила новый старт
+					start = main_states[group_num];
+				}
+				else if (accepting_states.contains(state)) { // добавила новые принимающие состояния
+					accepting_states.erase(state);
+					accepting_states.insert(main_states[group_num]);
+				}
+
+				main_states[group_num]->positions.insert(state->positions.begin(), state->positions.end());
+
+				for (auto& tran : state->transitions) { // для каждого перехода в состоянии
+
+					if (from_which_group[tran.second] != group_num) { // если из другой группы
+						symbols.erase(tran.first);
+						main_states[group_num]->transitions[tran.first] = main_states[from_which_group[tran.second]];
+					}
+					else if ((symbols.contains(tran.first) && (main_states[group_num]->transitions[tran.first] != main_states[group_num]))) { // из этой же группы и еще не определен
+						main_states[group_num]->transitions[tran.first] = main_states[group_num];
+					}
+				}
+			}
+
+			// удаляем все состояния в группе, кроме главного
+			auto it = ++group.begin();
+			while (it != group.end()) {
+				(*it)->positions.clear();
+				(*it)->transitions.clear();
+				delete(*it);
+				it = group.erase(it);
+			}
+
+			++group_num;
+		}
+
+		states.clear();
+		for (auto group : split_groups) {
+			for (auto state : group) {
+				states.push_back(state);
+			}
+		}
+
+		from_which_group.clear();
+		main_states.clear();
+		split_groups.clear();
 	}
 
 	void DFA::PrintState(std::ostringstream& buffer) {
@@ -251,7 +402,7 @@ namespace MyLib {
 			}
 			buffer << "\"];\n";
 
-			for (auto tran : state->transitions) {
+			for (auto& tran : state->transitions) {
 				auto it = std::find(states.begin(), states.end(), tran.second);
 				int id_to = std::distance(states.begin(), it);
 				buffer << id_from << "->" << id_to << " [label=\" " << tran.first << " \"];\n";
@@ -260,7 +411,7 @@ namespace MyLib {
 		}
 	}
 
-	void DFA::CreateDFAImg() {
+	void DFA::CreateDFAImg(const char* f_name) {
 
 		std::ostringstream buffer("", std::ios_base::ate);
 
@@ -271,14 +422,19 @@ namespace MyLib {
 		Agraph_t* g = agmemread(buffer.str().c_str());
 		GVC_t* gvc = gvContext();
 		gvLayout(gvc, g, "dot");
-		gvRenderFilename(gvc, g, "png", ".\\dfa.png");
+		gvRenderFilename(gvc, g, "png", f_name);
 		gvFreeLayout(gvc, g);
 		agclose(g);
 		gvFreeContext(gvc);
 	}
+	// ----
 
-	void DFA::Re2DFA() {
-
+	// ----
+	DFA& DFA::Compile(std::string& str) {
+		
+		// 0 шаг - построение дерева
+		Re2Tree(str);																								        
+		CreateTreeImg();
 		Node* root = GetRoot(); 
 
 		// 1 шаг - нумерация символов алфавита
@@ -296,8 +452,21 @@ namespace MyLib {
 
 		// 3 шаг - создание состояний
 		CreatingStates(conformity, follow_pos);
+		CreateDFAImg(".\\dfa.png");
 
 		// 4 шаг - минимизация ДКА
 		DFAMinimization();
+		CreateDFAImg(".\\mindfa.png");
+
+		return *this;
 	}
+
+	std::vector<std::string> DFA::FindAll(std::string& sample, std::string& re) {
+		Compile(re);
+		FindAll(sample);
+	}
+
+
+	// ----
+
 }

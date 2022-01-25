@@ -42,6 +42,13 @@ namespace MyLib {
 		// для функции печати
 		void PrintNode(const Node* root, std::ostringstream& buffer, int id);
 
+		Node* GetRoot() const {
+			return this->root;
+		}
+
+		void SetRoot(Node* ptr) {
+			this->root = ptr;
+		}
 	public:
 		Lexer(Node* r = nullptr) : root(r) {}
 
@@ -50,14 +57,6 @@ namespace MyLib {
 		}
 
 		Lexer& operator = (const Lexer& tree);
-
-		Node* GetRoot() const {
-			return this->root;
-		}
-
-		void SetRoot(Node* ptr) {
-			this->root = ptr;
-		}
 
 		// парсим токены в вектор 
 		void ParseRe(std::string& str, std::vector<std::string>& vec); 
