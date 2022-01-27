@@ -7,13 +7,32 @@ using namespace MyLib;
 int main()
 {
 	DFA re = DFA();
-	std::string str = "^(f|c)^ w .	^c";     // #|(1:djd)a{3,5}(2:jdj)d+(pb)+(676:evu+|b+)s\\676i\\1   // L(L|D)+ //L(2:hd|h)(7:f)\\2(\\7L|D)+
+	
+	//std::string reg = "#||(a.c)|#+";
+
+	//re.Compile(reg);
+	std::string str = ".rotiiim+e";  
+	//std::vector<std::string> vecan = re.FindAll(reg, str);
+	//std::vector<std::string> veco = re.FindAll(str);
+
+	//std::string regex = re.KPath();
+
+
+	std::string reg2 = "(1:i{2,3})(\\1)";
+	re.Compile(reg2);
+	std::string regex1 = re.KPath();
+	//std::string reg1 = "(me)";
+	//std::string stringa = "(so|do|ro)+(me)";
+	//std::vector<std::string> vec = re.FindAll(reg2, str);
+	//std::vector<std::string> vec1 = re.FindAll(regex1, str);
+	std::cout << "hi";
+	// #|(1:djd)a{3,5}(2:jdj)d+(pb)+(676:evu+|b+)s\\676i\\1   // L(L|D)+ //L(2:hd|h)(7:f)\\2(\\7L|D)+
 	
 								//r(nr|#+)+(n|r)+n						// a{5}7{3,4}9(ab){1}		// L{2}(2:hd|h)4{3,}(7:f){1,2}\\2(\\7L|D)+																		        
 	
 
-	re.Compile(str);									// (a|b)+abb
-										// ((b|a)(b|a)(b|a)+)+ - 2 ñîñòîÿíèÿ îáúåäèíèòü 
+										// (a|b)+abb
+										// ((b|a)(b|a)(b|a)+)+ - 2 ÑÐ¾ÑÑ‚Ð¾ÑÐ½Ð¸Ñ Ð¾Ð±ÑŠÐµÐ´Ð¸Ð½Ð¸Ñ‚ÑŒ 
 	
 
 	return 0;

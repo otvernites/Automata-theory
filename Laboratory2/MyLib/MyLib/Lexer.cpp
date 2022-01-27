@@ -239,6 +239,7 @@ namespace MyLib {
 					if ((*it)->GetVal().second == ("\\" + (*g_it)->GetVal().second)) {
 						//копирование
 						(*it)->SetRight(CopyBranch((*g_it)->GetRight()));
+						(*it)->GetRight()->SetParent(*it);
 					}
 				}
 			}
@@ -281,7 +282,7 @@ namespace MyLib {
 		}
 		else if ((*g_it)->GetParent()->GetRight() == (*g_it)) {
 			(*g_it)->GetParent()->SetRight(root);
-			root->SetParent((*g_it));
+			root->SetParent((*g_it)->GetParent());
 			DeleteSubtree(*g_it); // здесь remove g_it и его потомков 
 		}
 		// в этой функции правого потомка для последнего узла не устанавливаем!
@@ -310,6 +311,16 @@ namespace MyLib {
 		root->SetParent(node);
 		
 		return oper;
+	}
+
+	void Lexer::InorderForReapeatGr(std::vector<Node*>& repeat_nodes, Node* current_node) {
+		if (current_node) {
+			InorderForReapeatGr(repeat_nodes, current_node->GetLeft());
+			if (current_node->GetType() == TypeOfNode::plus_node) {
+				repeat_nodes.push_back(current_node);
+			}
+			InorderForReapeatGr(repeat_nodes, current_node->GetRight());
+		}
 	}
 
 	void Lexer::RepeatPaste(std::vector<Node*>& repeat_g) {
@@ -431,7 +442,7 @@ namespace MyLib {
 					(*it)->SetType(TypeOfNode::plus_node);
 					(*it)->SetVal(std::make_pair((*it)->GetVal().first, current_symb));
 
-					repeat_g.push_back(*it);
+					//repeat_g.push_back(*it);
 
 					it = syn_tree.erase(it - 1);
 
@@ -515,6 +526,7 @@ namespace MyLib {
 		GroupPaste(capt_g); // дорисовываем группы захвата при вызове
 		capt_g.clear(); // очищаем временный вектор
 
+		InorderForReapeatGr(repeat_g, syn_tree[0]);
 		RepeatPaste(repeat_g); // дорисовываем повторения при вызове
 		repeat_g.clear();
 	}

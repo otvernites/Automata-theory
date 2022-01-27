@@ -19,6 +19,8 @@ namespace MyLib {
 		std::vector<State*> states; // множество состояний автомата (произв порядок)
 		std::set<State*> accepting_states; // множ-во принимающих состояний (произв)
 
+		std::map<std::tuple<int, int, int>, std::string> subpaths; // k-пути для всех состояний, по которым строится ДКА (откуда, куда, промежуточное состояние) !!!!!!!!!!!
+
 		// ----------
 		// Нумерация символов алфавита
 		void Numbering(Node* node, std::unordered_map<int, std::string>& map);
@@ -47,6 +49,20 @@ namespace MyLib {
 			return start;
 		}
 
+		// Геттер для всех состояний
+		std::vector<State*> GetStates() const {           
+			return states;
+		}
+
+		// Геттер для принимающих состояний
+		std::set<State*> GetAcceptStates() const {
+			return accepting_states;
+		}
+
+		std::set<std::string> GetAlphabet() const {
+			return alphabet;
+		}
+			
 	protected:
 		// ----------
 		// Для одновременного построения множеств 
@@ -61,16 +77,22 @@ namespace MyLib {
 		// Изображение DFA
 		void CreateDFAImg(const char* f_name);
 
+		// ----------
+		void KPathInduction(int k, int id_from, int id_to, std::map<std::pair<int, int>, std::vector<std::string>> paths); // !!!!!!!!!!
+
 	public:
 		DFA(Node* r = nullptr, State* s = nullptr): Lexer(r), start(s) {}
 
 		// Построение минДКА из РВ
-		DFA& Compile(std::string& str);
+		DFA& Compile(std::string str);
 
-		// Для регулярного выражения
-		std::vector<std::string> FindAll(std::string& sample, std::string& re);
+		// Для регулярного выражения поиск всех непересекающизся вхождений (без доступа к гр.з.)
+		std::vector<std::string> FindAll(std::string re, std::string sample);
 
-		// Для скомпилированного автомата
-		std::vector<std::string> FindAll(std::string& sample);
+		// Для скомпилированного автомата поиск всех непересекающизся вхождений (без доступа к гр.з.)
+		std::vector<std::string> FindAll(std::string sample);
+
+		// ДКА в регулярку
+		std::string KPath(); // !!!!!!!!!!!!!!
 	};
 }

@@ -33,6 +33,9 @@ namespace MyLib {
 		// вставляем в левое поддерево node наспамленные
 		Node* EmbedGroup(int value, Node* node, Node* origin);
 
+		// заполняем вектор местонахождениями plus_node
+		void InorderForReapeatGr(std::vector<Node*>& repeat_nodes, Node* current_node);
+
 		// восстанавливаем повторяющиеся выражения
 		void RepeatPaste(std::vector<Node*>& repeat_nodes);
 
@@ -42,6 +45,7 @@ namespace MyLib {
 		// для функции печати
 		void PrintNode(const Node* root, std::ostringstream& buffer, int id);
 
+	protected:
 		Node* GetRoot() const {
 			return this->root;
 		}
@@ -53,7 +57,9 @@ namespace MyLib {
 		Lexer(Node* r = nullptr) : root(r) {}
 
 		~Lexer() {
-			DeleteSubtree(root);
+			if (root != nullptr) {
+				DeleteSubtree(root);
+			}
 		}
 
 		Lexer& operator = (const Lexer& tree);

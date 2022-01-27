@@ -28,20 +28,6 @@ namespace MyLib {
 
 		out << " {" << n.GetVal().first << "}  " << n.GetVal().second << " )";
 
-		/*
-		out << " /";
-		for (auto val : n.first) {
-			out << val << " ";
-		}
-		out << "/ ";
-
-		out << " *";
-		for (auto val : n.last) {
-			out << val << " ";
-		}
-		out << "* ";
-		*/
-
 		return out;
 	}
 }
