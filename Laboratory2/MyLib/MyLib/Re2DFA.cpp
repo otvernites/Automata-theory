@@ -247,14 +247,18 @@ namespace MyLib {
 
 	void DFA::DFAMinimization() {
 
+		if (this->states.size() == 1) {
+			return;
+		}
+
 		std::vector<std::set<State*>> split_groups; // П, вектор множеств состояний, которые мы потом объединим в одно (изменяем)
-				
+		
 		split_groups.push_back(accepting_states); // добавили туда множество принимающих
 		if (states.size() != 1) {
 			split_groups.push_back(std::set<State*>());  // и множество оставшихся (S - F)
 		}
 		for (auto state : states) { 
-			if (!accepting_states.contains(state)) {
+			if ((!accepting_states.contains(state)) && (states.size() != 1)) {
 				split_groups[1].insert(state);
 			}
 		}
@@ -329,48 +333,54 @@ namespace MyLib {
 			for (auto state : states) {
 				from_which_group.insert(std::make_pair(state, group_num));
 			}
-			main_states.push_back(*states.begin());
-			++group_num;
+			if (states.begin() != states.end()) {
+				main_states.push_back(*(states.begin()));
+				++group_num;
+			}
 		}
 		
 		// каждая группа - новое состояние, объединяет в себе несколько состояний
 		group_num = 0;
 		for (auto& group : split_groups) { // для каждой группы
-			std::set<std::string> symbols = alphabet;
-			for (auto state : group) { // для каждого состояния в группе
+			if (!group.empty()) {
+				std::set<std::string> symbols = alphabet;
+				for (auto state : group) { // для каждого состояния в группе
 
-				if (state == start) { // установила новый старт
-					start = main_states[group_num];
-				}
-				else if (accepting_states.contains(state)) { // добавила новые принимающие состояния
-					accepting_states.erase(state);
-					accepting_states.insert(main_states[group_num]);
-				}
-
-				main_states[group_num]->positions.insert(state->positions.begin(), state->positions.end());
-
-				for (auto& tran : state->transitions) { // для каждого перехода в состоянии
-
-					if (from_which_group[tran.second] != group_num) { // если из другой группы
-						symbols.erase(tran.first);
-						main_states[group_num]->transitions[tran.first] = main_states[from_which_group[tran.second]];
+					if (state == start) { // установила новый старт
+						start = main_states[group_num];
 					}
-					else if ((symbols.contains(tran.first) && (main_states[group_num]->transitions[tran.first] != main_states[group_num]))) { // из этой же группы и еще не определен
-						main_states[group_num]->transitions[tran.first] = main_states[group_num];
+					else if (accepting_states.contains(state)) { // добавила новые принимающие состояния
+						accepting_states.erase(state);
+						accepting_states.insert(main_states[group_num]);
+					}
+
+					main_states[group_num]->positions.insert(state->positions.begin(), state->positions.end());
+
+					for (auto& tran : state->transitions) { // для каждого перехода в состоянии
+
+						if (from_which_group[tran.second] != group_num) { // если из другой группы
+							symbols.erase(tran.first);
+							main_states[group_num]->transitions[tran.first] = main_states[from_which_group[tran.second]];
+						}
+						else if ((symbols.contains(tran.first) && (main_states[group_num]->transitions[tran.first] != main_states[group_num]))) { // из этой же группы и еще не определен
+							main_states[group_num]->transitions[tran.first] = main_states[group_num];
+						}
 					}
 				}
-			}
 
-			// удаляем все состояния в группе, кроме главного
-			auto it = ++group.begin();
-			while (it != group.end()) {
-				(*it)->positions.clear();
-				(*it)->transitions.clear();
-				delete(*it);
-				it = group.erase(it);
-			}
+				// удаляем все состояния в группе, кроме главного
+				if (group.begin() != group.end()) {
+					auto it = ++group.begin();
+					while (it != group.end()) {
+						(*it)->positions.clear();
+						(*it)->transitions.clear();
+						delete(*it);
+						it = group.erase(it);
+					}
+				}
 
-			++group_num;
+				++group_num;
+			}
 		}
 
 		states.clear();
@@ -432,10 +442,15 @@ namespace MyLib {
 		agclose(g);
 		gvFreeContext(gvc);
 	}
+
+	int DFA::GetMinStates() const {
+		return states.size();
+	}
+
 	// ----
 
 	// ----
-	DFA& DFA::Compile(std::string str) {
+	DFA* DFA::Compile(std::string str) {
 
 		// Чистим за собой предыдущее состояние автомата
 		for (auto it = states.begin(); it != states.end(); ++it) {
@@ -473,10 +488,15 @@ namespace MyLib {
 		DFAMinimization();
 		CreateDFAImg(".\\mindfa.png");
 
-		return *this;
+		return this;
 	}
 
 	std::vector<std::string> DFA::FindAll(std::string sample) {
+
+		State* current_state = GetStart();
+		if (current_state == nullptr) {
+			throw std::exception("The automate needs to be initialized!");
+		}
 
 		// предобработка строки
 		std::set<std::string> metacharacters = { "#", "|", ".", "+", "{", "}", "(", ")", "\\" };
@@ -489,10 +509,6 @@ namespace MyLib {
 			++str_it;
 		}
 
-		State* current_state = GetStart();
-		if (current_state == nullptr) {
-			throw std::exception("The automate needs to be initialized!");
-		}
 		std::vector<std::string> results;
 
 		// если стартовое совпадает с принимающим 
@@ -535,7 +551,12 @@ namespace MyLib {
 						correct_str.clear();
 						tmp_str.clear();
 						current_state = GetStart();
-						--i;
+						if (symb.size() > 1) {
+							i = i - 2;
+						}
+						else {
+							--i;
+						}
 					}
 					else { // ничего не подошло
 						i = potential_next_id;
@@ -553,7 +574,12 @@ namespace MyLib {
 					potential_next_id = -1;
 					tmp_str.clear();
 					current_state = GetStart();
-					--i;
+					if (symb.size() > 1) {
+						i = i - 2;
+					}
+					else {
+						--i;
+					}
 				}
 				else { // ничего не подошло
 					current_state = GetStart();
@@ -595,6 +621,13 @@ namespace MyLib {
 	}
 
 	std::string DFA::KPath() {
+
+		if (GetStart() == nullptr) {
+			throw std::exception("The automate needs to be initialized!");
+		}
+
+		std::vector<std::string> results;
+
 		std::set<std::string> metacharacters = { "#", "|", ".", "+", "{", "}", "(", ")", "\\" };
 
 		subpaths.clear(); // очищаем выражения для промежуточных состояний индукции
@@ -626,6 +659,7 @@ namespace MyLib {
 		for (auto st : GetAcceptStates()) {
 			KPathInduction(k, numb_states[start_state], numb_states[st],  paths);
 			re += subpaths[std::make_tuple(numb_states[start_state], numb_states[st], k)] + "|";
+			if (re == "|") { re.pop_back(); }
 		}
 		if (!re.empty()) {
 			re.pop_back();
@@ -727,7 +761,120 @@ namespace MyLib {
 		}
 	}
 
+	void DFA::DFAproduct(DFA* first, DFA* second, int flag) {
 
+		if ((first->GetStart() == nullptr) || (second->GetStart() == nullptr)) {
+			throw std::exception("Automata must be initialized!");
+		}
+
+		// чистим за собой предыдущее состояние автомата
+		for (auto it = states.begin(); it != states.end(); ++it) {
+			delete* it;
+		}
+		states.clear();
+		start = nullptr;
+		alphabet.clear();
+		accepting_states.clear();
+		subpaths.clear();
+
+		// сформировали алфавит
+		std::set_intersection(first->alphabet.begin(), first->alphabet.end(), 
+			second->alphabet.begin(), second->alphabet.end(), std::inserter(alphabet, alphabet.begin()));
+
+		std::map<std::pair<State*, State*>, State*> dfa_prod; // соответствие пара исходных - новое состояние
+
+		// сформировали состояния + позиции (просто пронумеровали)
+		int id = 0;
+		for (auto first_state : first->states) {
+			for (auto second_state : second->states) {
+				State* new_state = new State();
+				new_state->positions.insert(id);
+				dfa_prod[std::make_pair(first_state, second_state)] = new_state;
+				++id;
+			}
+		}
+
+		// сформировали старт
+		start = dfa_prod[std::make_pair(first->start, second->start)];
+
+		// формируем переходы + принимающие состояния
+		for (auto& state : dfa_prod) {
+			for (auto& symb : alphabet) {
+				state.second->transitions[symb] = dfa_prod[std::make_pair(state.first.first->transitions[symb], state.first.second->transitions[symb])];
+			}
+			states.push_back(state.second); // добавляем состояния
+
+			// устанавливаем принимающие состояния (флаг для гибкости)
+			if (flag == 0) { // вызвана разность
+				if ((first->accepting_states.contains(state.first.first)) && (!second->accepting_states.contains(state.first.second))) {
+					accepting_states.insert(state.second);
+				}
+			}
+			/*
+			else if (flag == 1) { // вызвано дополнение
+
+			}
+			*/
+		}
+		DFAMinimization();
+	}
+
+	void DFA::DFAproduct(std::string first, std::string second, int flag) {
+		DFA* first_automat = new DFA();
+		first_automat->Compile(first);
+		DFA* second_automat = new DFA();
+		second_automat->Compile(second);
+
+		DFAproduct(first_automat, second_automat, flag);
+	}
+
+	std::string DFA::Difference(DFA* first, DFA* second) {
+		DFAproduct(first, second, 0);
+		CreateDFAImg(".\\dfa_diff.png");
+		return KPath();
+	}
+
+	std::string DFA::Difference(std::string first, std::string second) {
+		DFA* first_dfa = new DFA();
+		first_dfa->Compile(first);
+		DFA* second_dfa = new DFA();
+		second_dfa->Compile(second);
+		return Difference(first_dfa, second_dfa);
+	}
+
+	std::string DFA::Complement(DFA* dfa) {
+
+		// Формируем (алфавит)*
+		std::set<std::string> alphabet = dfa->GetAlphabet();
+		std::set<std::string> metacharacters = { "#", "|", ".", "+", "{", "}", "(", ")", "\\"};
+		std::string universum = "(^|(";
+
+		if (alphabet.size() == 0) {
+			universum = "(^$)"; //because alphabet is empty
+		}
+		for (auto symb : alphabet) {
+			if (metacharacters.find(symb) != metacharacters.end()) {
+				symb = "#" + symb;
+			}
+			universum += symb + "|";
+		}
+		if (alphabet.size()) {
+			universum.pop_back();
+			universum += ")+)";
+		}
+
+		DFA* total_dfa = new DFA();
+		total_dfa->Compile(universum);
+		Difference(total_dfa, dfa);
+		CreateDFAImg(".\\dfa_compl.png");
+		return KPath();
+	}
+
+	std::string DFA::Complement(std::string str) {
+		DFA* dfa = new DFA();
+		dfa->Compile(str);
+		return Complement(dfa);
+	}
 
 	// ----
 

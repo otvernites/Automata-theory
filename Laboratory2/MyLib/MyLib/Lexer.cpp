@@ -106,7 +106,7 @@ namespace MyLib {
 				break;
 
 			case '+':
-				if (str[i - 1] == '(') {
+				if ((str[i - 1] == '(') || (str[i - 1] == '|') || (str[i + 1] == '+')) {
 					throw std::exception("Invalid expression (+)! Please enter the string again.");
 					break;
 				}
@@ -116,13 +116,13 @@ namespace MyLib {
 				}
 
 			case '.':
-				if ((str[i-1] == '(') || (str[i + 1] == ')') || (str[i + 1] == '$')) {
+				if ((str[i-1] == '(') || (str[i + 1] == ')') || (str[i + 1] == '$') || (str[i + 1] == '|')) {
 					throw std::exception("Invalid expression (.)! Please enter the string again.");
 					break;
 				}
 
 			case '|':
-				if ((str[i - 1] == '(') || (str[i + 1] == ')') || (str[i + 1] == '$')) {
+				if ((str[i - 1] == '(') || (str[i + 1] == ')') || (str[i + 1] == '$') || (str[i + 1] == '|')) {
 					throw std::exception("Invalid expression (|)! Please enter the string again.");
 					break;
 				}

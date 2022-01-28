@@ -19,7 +19,7 @@ namespace MyLib {
 		std::vector<State*> states; // множество состояний автомата (произв порядок)
 		std::set<State*> accepting_states; // множ-во принимающих состояний (произв)
 
-		std::map<std::tuple<int, int, int>, std::string> subpaths; // k-пути для всех состояний, по которым строится ДКА (откуда, куда, промежуточное состояние) !!!!!!!!!!!
+		std::map<std::tuple<int, int, int>, std::string> subpaths; // k-пути для всех состояний, по которым строится ДКА (откуда, куда, промежуточное состояние) 
 
 		// ----------
 		// Нумерация символов алфавита
@@ -78,13 +78,24 @@ namespace MyLib {
 		void CreateDFAImg(const char* f_name);
 
 		// ----------
-		void KPathInduction(int k, int id_from, int id_to, std::map<std::pair<int, int>, std::vector<std::string>> paths); // !!!!!!!!!!
+		// Шаги индукции для k-пути
+		void KPathInduction(int k, int id_from, int id_to, std::map<std::pair<int, int>, std::vector<std::string>> paths);
+
+		// Произведение автоматов (скомп. автоматы)
+		void DFAproduct(DFA* first, DFA* second, int flag);
+
+		// Произведение автоматов (рег. выражения)
+		void DFAproduct(std::string first, std::string second, int flag);
+
 
 	public:
 		DFA(Node* r = nullptr, State* s = nullptr): Lexer(r), start(s) {}
 
+		// Геттер для кол-ва минимизированных состояний
+		int GetMinStates() const;
+
 		// Построение минДКА из РВ
-		DFA& Compile(std::string str);
+		DFA* Compile(std::string str);
 
 		// Для регулярного выражения поиск всех непересекающизся вхождений (без доступа к гр.з.)
 		std::vector<std::string> FindAll(std::string re, std::string sample);
@@ -93,6 +104,19 @@ namespace MyLib {
 		std::vector<std::string> FindAll(std::string sample);
 
 		// ДКА в регулярку
-		std::string KPath(); // !!!!!!!!!!!!!!
+		std::string KPath(); 
+
+		// Разность языков (скомп. автоматы)
+		std::string Difference(DFA* first, DFA* second);
+
+		// Разность языков (рег. выражения)
+		std::string Difference(std::string first, std::string second);
+		
+		// Дополнение языка (скомп. автомат)
+		std::string Complement(DFA* dfa);
+
+		// Дополнение языка (рег. выражение)
+		std::string Complement(std::string str);
+
 	};
 }

@@ -45,14 +45,7 @@ namespace MyLib {
 		// для функции печати
 		void PrintNode(const Node* root, std::ostringstream& buffer, int id);
 
-	protected:
-		Node* GetRoot() const {
-			return this->root;
-		}
 
-		void SetRoot(Node* ptr) {
-			this->root = ptr;
-		}
 	public:
 		Lexer(Node* r = nullptr) : root(r) {}
 
@@ -60,6 +53,14 @@ namespace MyLib {
 			if (root != nullptr) {
 				DeleteSubtree(root);
 			}
+		}
+
+		Node* GetRoot() const {
+			return this->root;
+		}
+
+		void SetRoot(Node* ptr) {
+			this->root = ptr;
 		}
 
 		Lexer& operator = (const Lexer& tree);
