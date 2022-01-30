@@ -26,7 +26,7 @@ class Lexer:
         # variables and auxiliary elements
         'INT_VAR', 'BOOL_VAR', 'PROC_VAR',
         'INT_ARR', 'BOOL_ARR', 'PROC_ARR',
-        'LABEL', 'VAR_CALL',
+        'LABEL', 'ARR_CALL', 'VAR_CALL',
 
         # literals
         'INT',
@@ -36,8 +36,7 @@ class Lexer:
         'LPAREN', 'RPAREN',
         'LBRACKET', 'RBRACKET',
         'LBRACE', 'RBRACE',
-        'COMMA', 'POINT', 'DOLLAR',
-        'TILDE', 'COLON', 'NL'
+        'COMMA', 'NL',
     ]
 
     t_LPAREN= r'\('
@@ -47,14 +46,20 @@ class Lexer:
     t_LBRACE = r'\{'
     t_RBRACE = r'\}'
     t_COMMA = r'\,'
-    t_POINT = r'\.'
-    t_DOLLAR = r'\$'
-    t_TILDE = r'\~'
-    t_COLON = r'\:'
     t_ignore = ' \t'
 
+    def t_ARR_CALL(self, t):
+        r'\d+\:(?!\w)'
+        t.value = int(t.value[:-1])
+        return t
+
     def t_INT(self, t):
-        r'[\+-]?\d+(?!\w)'
+        r'[\+-]?\d+\,(?!\w)'
+        t.value = int(t.value[:-1])
+        return t
+
+    def t_VAR_CALL(self, t):
+        r'\d+(?!\w)'
         t.value = int(t.value)
         return t
 
@@ -70,51 +75,47 @@ class Lexer:
 
     def t_LABEL(self, t):
         r'\~\d+(?!\w)'
-        t.value = t.value[1:]
-        return t
-
-    def t_VAR_CALL(self, t):
-        r'\d+(?!\w)'
+        t.value = int(t.value[1:])
         return t
 
     def t_INT_ARR(self, t):
         r'\,\d+\:(?!\w)'
-        t.value = t.value[1 : -1]
+        t.value = int(t.value[1 : -1])
         return t
 
     def t_BOOL_ARR(self, t):
         r'\.\d+\:(?!\w)'
-        t.value = t.value[1 : -1]
+        t.value = int(t.value[1 : -1])
         return t
 
     def t_PROC_ARR(self, t):
         r'\$\d+\:(?!\w)'
-        t.value = t.value[1 : -1]
+        t.value = int(t.value[1 : -1])
         return t
 
     def t_INT_VAR(self, t):
         r'\,\d+(?!\w)'
-        t.value = t.value[1:]
+        t.value = int(t.value[1:])
         return t
 
     def t_BOOL_VAR(self, t):
         r'\.\d+(?!\w)'
-        t.value = t.value[1:]
+        t.value = int(t.value[1:])
         return t
 
     def t_PROC_VAR(self, t):
         r'\$\d+(?!\w)'
-        t.value = t.value[1:]
+        t.value = int(t.value[1:])
         return t
 
     def t_INCR(self, t):
         r'\,\#\d+(?!\w)'
-        t.value = t.value[2:]
+        t.value = int(t.value[2:])
         return t
 
     def t_DECR(self, t):
         r'\,\*\d+(?!\w)'
-        t.value = t.value[2:]
+        t.value = int(t.value[2:])
         return t
 
     def t_ASSIGN(self, t):
