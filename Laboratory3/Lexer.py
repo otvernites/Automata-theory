@@ -1,7 +1,6 @@
 #! /usr/bin/env python
 
 import ply.lex as lex
-import re
 import sys
 
 reserved = {
@@ -36,7 +35,7 @@ class Lexer:
         'LPAREN', 'RPAREN',
         'LBRACKET', 'RBRACKET',
         'LBRACE', 'RBRACE',
-        'COMMA', 'NL',
+        'NL', 'COLON',
     ]
 
     t_LPAREN= r'\('
@@ -45,7 +44,7 @@ class Lexer:
     t_RBRACKET = r'\]'
     t_LBRACE = r'\{'
     t_RBRACE = r'\}'
-    t_COMMA = r'\,'
+    t_COLON = r'\:'
     t_ignore = ' \t'
 
     def t_ARR_CALL(self, t):
@@ -55,7 +54,7 @@ class Lexer:
 
     def t_INT(self, t):
         r'[\+-]?\d+\,(?!\w)'
-        t.value = int(t.value[:-1])
+        t.value = t.value[:-1]
         return t
 
     def t_VAR_CALL(self, t):
@@ -110,12 +109,12 @@ class Lexer:
 
     def t_INCR(self, t):
         r'\,\#\d+(?!\w)'
-        t.value = int(t.value[2:])
+        t.value = t.value
         return t
 
     def t_DECR(self, t):
         r'\,\*\d+(?!\w)'
-        t.value = int(t.value[2:])
+        t.value = t.value
         return t
 
     def t_ASSIGN(self, t):
@@ -179,7 +178,7 @@ class Lexer:
 
 if __name__ == '__main__':
     lexer = Lexer()
-    f = open('test2.txt', 'r')
+    f = open('lexer_test.txt', 'r')
     data = f.read()
     f.close()
 
