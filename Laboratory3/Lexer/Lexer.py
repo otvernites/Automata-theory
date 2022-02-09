@@ -178,7 +178,7 @@ class Lexer:
 
 if __name__ == '__main__':
     lexer = Lexer()
-    f = open('lexer_test.txt', 'r')
+    f = open('Tests/test_lexer.txt', 'r')
     data = f.read()
     f.close()
 

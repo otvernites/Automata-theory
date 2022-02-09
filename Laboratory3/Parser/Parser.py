@@ -1,10 +1,11 @@
 #! /usr/bin/env python
-import re
 import sys
 import ply.yacc as yacc
 from ply.lex import LexError
-from Lexer import Lexer
-from SyntaxTree import Node
+
+from Variable import Array, Variable
+from Lexer.Lexer import Lexer
+from Parser.SyntaxTree import Node
 
 
 class Parser:
@@ -14,7 +15,7 @@ class Parser:
     def __init__(self):
         self.lexer = Lexer()
         self.parser = yacc.yacc(module=self, debug=False)
-        self.declaration = dict() # уникальный номер - что делает
+        self.declaration = dict()  # уникальный номер - что делает
         self.error = False
 
     def parse(self, s):
@@ -108,16 +109,24 @@ class Parser:
     def p_procedure_simple(self, p):
         """procedure : PROC_VAR"""
         p[0] = Node('procedure', value=p[1], lineno=p.lineno(1))
-        self.declaration[p[1]] = ""
+        var = Variable("proc", int(p[1]))
+        self.declaration[var.name] = var
 
     def p_procedure(self, p):
         """procedure : proc_arr_var"""
         p[0] = p[1]
-        self.declaration[p[1]] = ""
+        str_view = p[1].__str__()
+        id1 = str_view.find(':')
+        id2 = str_view.find('(')
+
+        var = Array("proc_arr", int(str_view[id1+2:id2-1]))
+        self.declaration[var.name] = var
 
     def p_label(self, p):
         """label : LABEL"""
         p[0] = Node('label', value=p[1], lineno=p.lineno(1))
+        var = Variable("label", int(p[1]))
+        self.declaration[var.name] = var
 
     def p_literal(self, p):
         """literal : LPAREN INT RPAREN
@@ -137,7 +146,7 @@ class Parser:
 
     def p_arr_call_id(self, p): # array element access
         """arr_call_id : ARR_CALL LBRACKET id_list RBRACKET"""
-        p[0] = Node('arr_call_id', value=p[1], children=[p[3]], lineno=p.lineno(1))
+        p[0] = Node('arr_call', value=p[1], children=[p[3]], lineno=p.lineno(1))
 
     def p_call(self, p): # common call (getters)
         """call : arr_call_id
@@ -167,7 +176,7 @@ class Parser:
         else:
             p[0] = Node('id_list', children=[p[1]], lineno=p.lineno(1))
 
-    # проверять, что индексы - целые или по индексам целые числа
+    # проверять, что индексы - целые или по индексам целые числа (и они больше нуля)
     def p_id_simple(self, p):
         """id : INT"""
         p[0] = Node('id', value=p[1], lineno=p.lineno(1))
@@ -243,10 +252,10 @@ class Parser:
         """
         self.error = True
         if len(p) == 6:
-            p[0] = Node('conditionals', value="assignment error", children=[p[1],p[4]], lineno=p.lineno(1))
+            p[0] = Node('error', value="assignment error", children=[p[1],p[4]], lineno=p.lineno(1))
             sys.stderr.write(f'Invalid assignment at {p[0].lineno}\n')
         else:
-            p[0] = Node('assignment', value="assignment error", children=[p[1], p[3]], lineno=p.lineno(1))
+            p[0] = Node('error', value="assignment error", children=[p[1], p[3]], lineno=p.lineno(1))
             sys.stderr.write(f'Invalid assignment at {p[0].lineno}\n')
 
     # math operations
@@ -447,14 +456,14 @@ class Parser:
 
 if __name__ == '__main__':
     parser = Parser()
-    f = open('parse_test_program.txt', 'r')
+    f = open('Tests/test_parser_program.txt', 'r')
     data = f.read()
     f.close()
 
     result = parser.parser.parse(data, debug=True)
     try:
         dot = result.print_tree()
-        dot.write_png('tree.png')
+        dot.write_png('Parser/tree.png')
     except Exception:
         sys.stderr.write(f'> Tree building error! Correct your program.\n')
 
