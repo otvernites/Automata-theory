@@ -35,7 +35,7 @@ class Lexer:
         'LPAREN', 'RPAREN',
         'LBRACKET', 'RBRACKET',
         'LBRACE', 'RBRACE',
-        'NL', 'COLON',
+        'NL', 'COLON', 'DASH',
     ]
 
     t_LPAREN= r'\('
@@ -45,6 +45,7 @@ class Lexer:
     t_LBRACE = r'\{'
     t_RBRACE = r'\}'
     t_COLON = r'\:'
+    t_DASH = r'\-'
     t_ignore = ' \t'
 
     def t_ARR_CALL(self, t):

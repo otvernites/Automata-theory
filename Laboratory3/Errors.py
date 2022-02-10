@@ -25,12 +25,16 @@ class NotIntVariable(ProgramError):
     message = "The index is not an integer!"
 
 
+class AssignmentError(ProgramError):
+    message = "Cannot assign a value of this type to a variable!"
+
+
 class AssignmentErrorLeft(ProgramError):
     message = "Incorrect value to the left of the assignment!"
 
 
 class AssignmentErrorRight(ProgramError):
-    message = "Incorrect value to the left of the assignment!"
+    message = "Incorrect value to the right of the assignment!"
 
 
 class ErrorIndexes(ProgramError):
@@ -39,6 +43,23 @@ class ErrorIndexes(ProgramError):
 
 class IndexOutOfRange(ProgramError):
     message = "Array index out of range!"
+
+
+class IdentificationError(ProgramError):
+    message = "Identification error!"
+
+
+class ArithmeticError(ProgramError):
+    message = "The variable is not an integer!"
+
+
+class LogicError(ProgramError):
+    message = "The Pierce arrow is defined for several variables! (>=2)"
+
+
+class NotBooleanVariable(ProgramError):
+    message = "The boolean expression must contain only T or F values!"
+
 
 
 

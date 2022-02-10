@@ -288,7 +288,7 @@ class Parser:
             p[0] = Node('log_type', value=p[1], lineno=p.lineno(1))
 
     def p_logic_expr(self, p):
-        """logic_expr : logic_expr COLON log_type
+        """logic_expr : logic_expr DASH log_type
                       | log_type
         """
         if len(p) == 4:
@@ -370,8 +370,11 @@ class Parser:
             p[0] = Node('conditionals', children=[p[2],p[4]], lineno=p.lineno(1))
         elif len(p) == 3:
             p[0] = Node('conditionals', children=[p[2]], lineno=p.lineno(1))
-        elif len(p) == 2:
-            p[0] = Node('conditionals', children=[p[1]], lineno=p.lineno(1))
+        elif len(p) == 2 and self.declaration.get(p[1].value):
+            if self.declaration.get(p[1].value).type == "label":
+                p[0] = Node('conditionals', children=[p[1]], lineno=p.lineno(1))
+            else:
+                p[0] = Node('identifier', children=[p[1]], lineno=p.lineno(1))
 
     def p_conditionals_error(self, p):
         """conditionals : LBRACKET error RBRACKET GOTO var_call_id
@@ -404,9 +407,7 @@ class Parser:
     # identification operations
     # проверить, что в call вызов процедуры
     def p_identification(self, p):
-        """identification : declaration LINK var_call_id
-                          | call LINK var_call_id
-                          | declaration LINK_BREAK var_call_id
+        """identification : call LINK var_call_id
                           | call LINK_BREAK var_call_id
         """
         p[0] = Node('identification', value=p[2], children=[p[1], p[3]], lineno=p.lineno(1))
@@ -415,9 +416,7 @@ class Parser:
         """identification : error LINK var_call_id
                           | error LINK_BREAK var_call_id
 
-                          | declaration LINK error
                           | call LINK error
-                          | declaration LINK_BREAK error
                           | call LINK_BREAK error
 
                           | identification error
