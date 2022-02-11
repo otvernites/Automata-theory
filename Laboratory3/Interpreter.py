@@ -106,9 +106,11 @@ class Interpreter:
         elif node.type == "procedure":
 
             var = Variable("proc", node.value)
+            var.value = "np"
 
             if not (node.value in self.parser.declaration.keys()):
                 self.parser.declaration[var.name] = var
+            self.parser.declaration[var.name].value = "np"
 
             if self.find_duplicate(var.name):
                 self.symbol_table[var.name] = var
@@ -154,6 +156,9 @@ class Interpreter:
 
             self.array_indexes(node, 0)
 
+        # np
+        elif node.type == "pass":
+            pass
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ for assignment
         # 6
         elif node.type == "var_call":
@@ -265,6 +270,17 @@ class Interpreter:
             else:
                 raise NonExistentVariable
 
+        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ for comparison
+
+        # 4 eq np | ,#5 eq 6,
+        elif node.type == "comparison":
+            self.compare(node)
+
+
+
+
+
+
 
     """
     
@@ -281,8 +297,7 @@ class Interpreter:
     
 
     
-    # 4 eq np | ,#5 eq 6,
-    elif node.type == "comparison":
+
     
     # (.#T) {
     #   statement
@@ -294,10 +309,7 @@ class Interpreter:
     #   statement
     # }
     elif node.type == "cycle":
-        
-    # np
-    elif node.type == "pass":
-        
+                
     # mf mb mr ml tp
     elif node.type == "robot":
     
@@ -305,7 +317,7 @@ class Interpreter:
     elif node.type == "empty":
     
     """
-    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ for declaration
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ for declaration
     def array_indexes(self, node, flag):
         leafs, arrays_call = self.get_leaf_nodes(node)  # получила все листья-индексы
         new_leafs = self.split_leafs(leafs)
@@ -469,7 +481,8 @@ class Interpreter:
         leafs = [leaf for leaf in leafs if leaf[1] is not node]
 
         return leafs, nested_arrays_call
-    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ for assignment
+
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ for assignment
 
     def assign(self, node):
 
@@ -489,16 +502,22 @@ class Interpreter:
         left_child = node.children[0]
         l_indexes = self.interpreter(left_child)  # если слева - вызов массива
 
-        if node.children[1].type != "var_call" and node.children[1].type != "arr_call":  # если литерал
-            right = self.interpreter(node.children[1])  # возвращаемое значение сложной операции справа
+        # чтоб не выполнялась процедура
+        if node.children[1].type != "statement_block" and node.children[1].type != "statement":
+            if node.children[1].type != "var_call" and node.children[1].type != "arr_call":  # если литерал
+                right = self.interpreter(node.children[1])  # возвращаемое значение сложной операции справа
 
-            r_value = right.value if isinstance(right, Node) else right
+                r_value = right.value if isinstance(right, Node) else right
 
-        elif node.children[1].type != "arr_call":  # если переменная
-            r_value = self.symbol_table[node.children[1].value].value
-        else:  # если массив
-            right = self.interpreter(node.children[1])  # indexes
-            r_value = self.get_array_value(self.symbol_table[node.children[1].value], right)
+            elif node.children[1].type == "var_call":  # если переменная
+                right = self.symbol_table.get(node.children[1].value)
+                if right is not None:
+                    r_value = right.value
+                else:
+                    raise NonExistentVariable
+            elif node.children[1].type == "arr_call":   # если массив
+                right = self.interpreter(node.children[1])  # indexes
+                r_value = self.get_array_value(self.symbol_table[node.children[1].value], right)
 
         # записываю в таблицу символов значение
         if left_child.type == "var_call" or left_child.type == "declaration":
@@ -510,8 +529,9 @@ class Interpreter:
             id = int(left_child.value)  # имя переменной
             type = self.symbol_table[id].type
 
+            is_num = lambda x: x.isdigit() if x[:1] != '-' else x[1:].isdigit()
             #  int bool  int_arr bool_arr = const или когда переменная справа -  возвращает значение T или F
-            if (((type == "int" or type == "int_arr") and r_value.isdigit()) or
+            if (((type == "int" or type == "int_arr") and is_num(r_value)) or
                     ((type == "bool" or type == "bool_arr") and (r_value is True or r_value is False))):
                 if type == "int" or type == "bool":
                     self.symbol_table[id].value = r_value
@@ -535,7 +555,8 @@ class Interpreter:
             id = int(left_child.value)  # имя переменной
             type = self.symbol_table[id].type
 
-            if ((type == "int_arr" and r_value.isdigit()) or
+            is_num = lambda x: x.isdigit() if x[:1] != '-' else x[1:].isdigit()
+            if ((type == "int_arr" and is_num(r_value)) or
                     (type == "bool_arr" and (r_value is True or r_value is False))):  # добавить, что это мб процедурой
 
                 delta = len((self.symbol_table[id]).size) - len(l_indexes)
@@ -653,10 +674,84 @@ class Interpreter:
         else:
             raise AssignmentErrorLeft
 
-    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ for identification
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ for identification
     def id_processing(self, node):
 
         operation = 0 if node.value == "@" else 1
+
+        left = self.symbol_table.get(node.children[0].value)
+        l_name = left.name
+        r_name = self.symbol_table.get(node.children[1].value)
+
+        if left is None or r_name is None:
+            raise NonExistentVariable
+
+        if left.type == "label" or r_name.type != "proc":
+            raise IdentificationError
+
+        list_of_procedures = self.id_table.get(l_name)
+        if operation == 0:
+            # link
+            if list_of_procedures is not None:
+                if r_name not in list_of_procedures:
+                    if not self.recursive_linking_check(l_name, r_name):
+                        self.id_table[l_name].append(r_name)
+                        return True
+            else:
+                if not self.recursive_linking_check(l_name, r_name):
+                    self.id_table[l_name] = [r_name]
+                    return True
+            return False
+        else:
+            # link break
+            if self.id_table.get(l_name):
+                if r_name in self.id_table[l_name]:
+                    self.id_table[l_name].remove(r_name)
+            return True
+
+    def recursive_linking_check(self, id, proc):
+        res = False
+        if self.symbol_table.get(id) == proc:
+            return True
+        list_of_procedures = self.id_table.get(proc.name)
+        if list_of_procedures:
+            for p in list_of_procedures:
+                res = self.recursive_linking_check(id, p)
+        return res
+
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ for math operation
+    def math(self, node, flag):
+        variable = self.symbol_table.get(int(node.value))
+
+        if variable is None:
+            raise NonExistentVariable
+
+        if variable.type != "int":
+            raise ArithmeticError
+
+        if flag == 0:
+            self.symbol_table[variable.name].value = str(int(variable.value) - 1)
+        else:
+            self.symbol_table[variable.name].value = str(int(variable.value) + 1)
+
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ for logical operations
+    def pier_arrow(self, next_value, prev_result):
+        if not next_value and not prev_result:
+            return True
+        else:
+            return False
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ for comparison
+    """
+    def compare(self, node):
+       comparison : arithmetic EQ INT
+                      | arithmetic EQ var_call_id
+                      | logics EQ TRUE
+                      | logics EQ FALSE
+                      | logic_expr EQ TRUE
+                      | logic_expr EQ FALSE
+                      | call EQ PASS
+                      | call EQ literal
+       
 
         l_name = self.symbol_table.get(node.children[0].value)
         r_name = self.symbol_table.get(node.children[1].value)
@@ -686,48 +781,28 @@ class Interpreter:
                 if r_name in self.id_table[l_name]:
                     self.id_table[l_name].remove(r_name)
             return True
-
-    def recursive_linking_check(self, id, proc):
-        res = False
-        if id == proc:
-            return True
-        list_of_procedures = self.id_table.get(proc)
-        if list_of_procedures:
-            for p in list_of_procedures:
-                res = self.recursive_linking_check(id, p)
-        return res
-
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ for math operation
-    def math(self, node, flag):
-        variable = self.symbol_table.get(int(node.value))
-
-        if variable is None:
-            raise NonExistentVariable
-
-        if variable.type != "int":
-            raise ArithmeticError
-
-        if flag == 0:
-            self.symbol_table[variable.name].value = str(int(variable.value) - 1)
-        else:
-            self.symbol_table[variable.name].value = str(int(variable.value) + 1)
-
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ for logical operations
-    def pier_arrow(self, next_value, prev_result):
-        if not next_value and not prev_result:
-            return True
-        else:
-            return False
+        """
 
 
 if __name__ == '__main__':
-    s = """ 
-    .3
-            .8<-F
-            7-9
-            ,2<-1,
-            .#T-8T-T-T-T
-            .#T-T-T-T-T-T-8
+    s = """ $1
+            $2
+            $3
+            $4
+            1 @ 2
+            2 @ 3
+            3 @ 1
+            4<-{
+                .3
+            }
+            
+            2<-{
+                .3<-F            
+            }
+            
+            1 % 2
+            1 @ 2
+                        
 
         """
     it = Interpreter()

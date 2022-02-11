@@ -311,6 +311,7 @@ class Parser:
     # проверить, что в call вызов процедуры
     def p_comparison(self, p):
         """comparison : arithmetic EQ INT
+                      | arithmetic EQ var_call_id
                       | logics EQ TRUE
                       | logics EQ FALSE
                       | logic_expr EQ TRUE
