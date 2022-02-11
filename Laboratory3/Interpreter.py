@@ -16,7 +16,7 @@ class Interpreter:
         self.symbol_table = dict()  # здесь все переменные, метки (int - разная информация)
         self.declaration = dict()  # процедуры, массивы процедур и метки (int - node или variable/array)
         self.id_table = dict()  # переменная - список связанных процедур (int-list)
-        
+
     def processing(self, program=None):
         self.program = program
         self.root, self.declaration, error = self.parser.parse(self.program)
@@ -165,11 +165,12 @@ class Interpreter:
             if self.find_duplicate(node.value):  # если такая не существует
                 raise NonExistentVariable
 
-        #elif node.type == "identifier":  <- аналогично var_call
+        # elif node.type == "identifier":  <- аналогично var_call
 
         # 7:[3,] | 7:[6] | 7:[8:[2]]
-        elif node.type == "arr_call": # если это вызов
-            return self.array_indexes(node, 1)  # arr_index_validation - хз могу не могу, т.к. запретила вызывать в себе # 3:[3:[1,]]
+        elif node.type == "arr_call":  # если это вызов
+            return self.array_indexes(node, 1)
+            # arr_index_validation - хз могу не могу, т.к. запретила вызывать в себе # 3:[3:[1,]]
 
         elif node.type == "literal":
             return node
@@ -188,7 +189,7 @@ class Interpreter:
             return self.id_processing(node)
 
         # 1 2 3
-        #elif node.type == "identifier":
+        # elif node.type == "identifier":
         #    #return self.id_processing(node)
         #    self.id_processing(node)
 
@@ -207,7 +208,7 @@ class Interpreter:
         # [F]  6
         # please 6
         # 6
-        #elif node.type == "conditionals":
+        # elif node.type == "conditionals":
         #    if len(node.children) == 1:
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ for logics
@@ -274,13 +275,7 @@ class Interpreter:
 
         # 4 eq np | ,#5 eq 6,
         elif node.type == "comparison":
-            self.compare(node)
-
-
-
-
-
-
+            return self.compare(node)
 
     """
     
@@ -317,7 +312,8 @@ class Interpreter:
     elif node.type == "empty":
     
     """
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ for declaration
+
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ for declaration
     def array_indexes(self, node, flag):
         leafs, arrays_call = self.get_leaf_nodes(node)  # получила все листья-индексы
         new_leafs = self.split_leafs(leafs)
@@ -388,6 +384,9 @@ class Interpreter:
     # for indexes
     @dispatch(Node, list)
     def get_array_value(self, leaf, indexes):
+        if self.symbol_table.get(leaf.value) is None:
+            raise NonExistentVariable
+
         type = self.symbol_table[leaf.value].type
 
         if len(self.symbol_table[leaf.value].size) == 0:
@@ -482,8 +481,7 @@ class Interpreter:
 
         return leafs, nested_arrays_call
 
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ for assignment
-
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ for assignment
     def assign(self, node):
 
         # вызываем присваивание для процедур (но! присваивнаие процедура-блок выражений обр в assign)
@@ -492,7 +490,7 @@ class Interpreter:
             l_type = self.symbol_table.get(node.children[0].value).type
             r_type = self.symbol_table.get(node.children[1].value).type
             if self.declaration.get(node.children[0].value) is not None \
-                                and self.declaration.get(node.children[1].value) is not None:
+                    and self.declaration.get(node.children[1].value) is not None:
                 if (l_type == "proc" or l_type == "proc_arr") and (r_type == "proc" or r_type == "proc_arr"):
                     self.assign_for_procedure(node)
                     return
@@ -501,12 +499,17 @@ class Interpreter:
 
         left_child = node.children[0]
         l_indexes = self.interpreter(left_child)  # если слева - вызов массива
+        r_value = None
 
         # чтоб не выполнялась процедура
         if node.children[1].type != "statement_block" and node.children[1].type != "statement":
-            if node.children[1].type != "var_call" and node.children[1].type != "arr_call":  # если литерал
-                right = self.interpreter(node.children[1])  # возвращаемое значение сложной операции справа
 
+            if node.children[1].type == "logics" or node.children[1].type == "comparison" or \
+                    node.children[1].type == "identification" or node.children[1].type == "robot":  # statement
+                r_value = self.interpreter(node.children[1])
+
+            elif node.children[1].type != "var_call" and node.children[1].type != "arr_call":  # литерал
+                right = self.interpreter(node.children[1])  # возвращаемое значение сложной операции справа
                 r_value = right.value if isinstance(right, Node) else right
 
             elif node.children[1].type == "var_call":  # если переменная
@@ -515,7 +518,7 @@ class Interpreter:
                     r_value = right.value
                 else:
                     raise NonExistentVariable
-            elif node.children[1].type == "arr_call":   # если массив
+            elif node.children[1].type == "arr_call":  # если массив
                 right = self.interpreter(node.children[1])  # indexes
                 r_value = self.get_array_value(self.symbol_table[node.children[1].value], right)
 
@@ -584,7 +587,8 @@ class Interpreter:
                     tmp_array = tmp_array[len((self.symbol_table[id]).array):]
                     (self.symbol_table[id]).array = np.concatenate((self.symbol_table[id].array, tmp_array), axis=0)
 
-                    (self.symbol_table[id]).array = (self.symbol_table[id]).array.reshape([i + 1 for i in expanded_array_indexes][::-1])
+                    (self.symbol_table[id]).array = (self.symbol_table[id]).array.reshape(
+                        [i + 1 for i in expanded_array_indexes][::-1])
                     (self.symbol_table[id]).array[tuple(expanded_array_indexes)[::-1]] = r_value
                     return
 
@@ -601,11 +605,6 @@ class Interpreter:
         else:
             raise AssignmentErrorLeft
 
-        """
-        if node.children[1].type == "declaration":  # и таких мб много (вдруг там statement block?)
-            raise AssignmentErrorRight
-        """
-
     def assign_for_procedure(self, node):
 
         left_child = node.children[0]
@@ -621,8 +620,8 @@ class Interpreter:
 
         # записываю в таблицу символов значение
         if left_child.type == "var_call":
-           self.declaration[id] = r_value
-           self.symbol_table[id] = r_value
+            self.declaration[id] = r_value
+            self.symbol_table[id] = r_value
 
         elif left_child.type == "arr_call":
 
@@ -674,7 +673,7 @@ class Interpreter:
         else:
             raise AssignmentErrorLeft
 
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ for identification
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ for identification
     def id_processing(self, node):
 
         operation = 0 if node.value == "@" else 1
@@ -719,7 +718,7 @@ class Interpreter:
                 res = self.recursive_linking_check(id, p)
         return res
 
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ for math operation
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ for math operation
     def math(self, node, flag):
         variable = self.symbol_table.get(int(node.value))
 
@@ -734,81 +733,68 @@ class Interpreter:
         else:
             self.symbol_table[variable.name].value = str(int(variable.value) + 1)
 
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ for logical operations
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ for logical operations
     def pier_arrow(self, next_value, prev_result):
         if not next_value and not prev_result:
             return True
         else:
             return False
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ for comparison
-    """
+
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ for comparison
     def compare(self, node):
-       comparison : arithmetic EQ INT
-                      | arithmetic EQ var_call_id
-                      | logics EQ TRUE
-                      | logics EQ FALSE
-                      | logic_expr EQ TRUE
-                      | logic_expr EQ FALSE
-                      | call EQ PASS
-                      | call EQ literal
-       
+        return_values = []
 
-        l_name = self.symbol_table.get(node.children[0].value)
-        r_name = self.symbol_table.get(node.children[1].value)
-
-        if l_name is None or r_name is None:
-            raise NonExistentVariable
-
-        if l_name.type == "label" or r_name.type != "proc":
-            raise IdentificationError
-
-        list_of_procedures = self.id_table.get(l_name)
-        if operation == 0:
-            # link
-            if list_of_procedures is not None:
-                if r_name not in list_of_procedures:
-                    if not self.recursive_linking_check(l_name, r_name):
-                        self.id_table[l_name].append(r_name)
-                        return True
+        for child in node.children:
+            if isinstance(child, str) or isinstance(child, int):
+                return_values.append(child)
             else:
-                if not self.recursive_linking_check(l_name, r_name):
-                    self.id_table[l_name] = [r_name]
-                    return True
+                if child.type == "incr" or child.type == "decr":
+                    self.interpreter(child)
+                    return_values.append(self.symbol_table[int(child.value)].value)
+                elif child.type == "logics" or child.type == "log_type":
+                    return_values.append(self.interpreter(child))
+                elif child.type == "var_call":
+                    if self.symbol_table.get(child.value) is None:
+                        raise NonExistentVariable
+                    return_values.append(self.symbol_table[child.value].value)
+                elif child.type == "arr_call":
+                    if self.symbol_table.get(child.value) is None:
+                        raise NonExistentVariable
+                    indices = self.interpreter(child)
+                    return_values.append(self.get_array_value(self.symbol_table[child.value], indices))
+                elif child.type == "literal":
+                    return_values.append(child.value)
+                else:
+                    raise ComparisonError
+
+        if len(return_values) != 2:
+            raise ComparisonError
+
+        if type(return_values[0]) is Node and type(return_values[1]) is Node:
+            raise ComparisonError
+        elif (type(return_values[0]) is Node and return_values[1] == 'np') or \
+                (return_values[0] == 'np' and type(return_values[1]) is Node):
             return False
-        else:
-            # link break
-            if self.id_table.get(l_name):
-                if r_name in self.id_table[l_name]:
-                    self.id_table[l_name].remove(r_name)
-            return True
-        """
+        elif type(return_values[0]) != type(return_values[1]):
+            raise ComparisonError
+
+        return return_values[0] == return_values[1]
 
 
 if __name__ == '__main__':
-    s = """ $1
-            $2
-            $3
-            $4
-            1 @ 2
-            2 @ 3
-            3 @ 1
-            4<-{
-                .3
-            }
-            
-            2<-{
-                .3<-F            
-            }
-            
-            1 % 2
-            1 @ 2
-                        
-
+    s = """    $1
+                $2
+                $3
+                $10
+                .4<-1 @ 2
+                .5<-2 @ 3
+                .6<-3 @ 1
+                .7<-2 @ 3
+                .8<-1 % 10
+                .9<-1 % 2
         """
     it = Interpreter()
     it.processing(s)
-
-
 
 """
 

@@ -35,7 +35,7 @@ class Lexer:
         'LPAREN', 'RPAREN',
         'LBRACKET', 'RBRACKET',
         'LBRACE', 'RBRACE',
-        'NL', 'COLON', 'DASH',
+        'NL', 'DASH',
     ]
 
     t_LPAREN= r'\('
@@ -44,7 +44,6 @@ class Lexer:
     t_RBRACKET = r'\]'
     t_LBRACE = r'\{'
     t_RBRACE = r'\}'
-    t_COLON = r'\:'
     t_DASH = r'\-'
     t_ignore = ' \t'
 

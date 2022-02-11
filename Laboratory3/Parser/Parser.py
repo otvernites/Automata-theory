@@ -215,13 +215,11 @@ class Parser:
                       | call ASSIGN call
                       | call ASSIGN literal
 
-                      | declaration ASSIGN arithmetic
                       | declaration ASSIGN logics
                       | declaration ASSIGN comparison
                       | declaration ASSIGN identification
                       | declaration ASSIGN robot
 
-                      | call ASSIGN arithmetic
                       | call ASSIGN logics
                       | call ASSIGN comparison
                       | call ASSIGN identification
@@ -241,7 +239,6 @@ class Parser:
 
                       | call ASSIGN error
 
-                      | error ASSIGN arithmetic
                       | error ASSIGN logics
                       | error ASSIGN comparison
                       | error ASSIGN identification
@@ -312,25 +309,40 @@ class Parser:
     def p_comparison(self, p):
         """comparison : arithmetic EQ INT
                       | arithmetic EQ var_call_id
+
+                      | var_call_id EQ var_call_id
+                      | var_call_id EQ INT
+                      | arr_call_id EQ INT
+
+                      | var_call_id EQ TRUE
+                      | var_call_id EQ FALSE
+                      | arr_call_id EQ TRUE
+                      | arr_call_id EQ FALSE
+
                       | logics EQ TRUE
                       | logics EQ FALSE
-                      | logic_expr EQ TRUE
-                      | logic_expr EQ FALSE
-                      | call EQ PASS
-                      | call EQ literal
+                      | log_type EQ TRUE
+                      | log_type EQ FALSE
+
+                      | var_call_id EQ PASS
+                      | arr_call_id EQ PASS
+
+                      | literal EQ literal
         """
         p[0] = Node('comparison', value=p[2], children=[p[1], p[3]], lineno=p.lineno(1))
 
     def p_comparison_error(self, p):
         """comparison : error EQ INT
+                      | error EQ var_call_id
                       | error EQ TRUE
                       | error EQ FALSE
                       | error EQ PASS
 
                       | arithmetic EQ error
+                      | var_call_id EQ error
+                      | arr_call_id EQ error
                       | logics EQ error
-                      | logic_expr EQ error
-                      | call EQ error
+                      | log_type EQ error
 
                       | arithmetic EQ error conditionals
                       | logics EQ error conditionals
@@ -456,7 +468,7 @@ class Parser:
 
 if __name__ == '__main__':
     parser = Parser()
-    f = open('Tests/test_parser_program.txt', 'r')
+    f = open('Tests/test_parser.txt', 'r')
     data = f.read()
     f.close()
 

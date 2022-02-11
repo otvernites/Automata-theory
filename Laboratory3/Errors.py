@@ -61,5 +61,9 @@ class NotBooleanVariable(ProgramError):
     message = "The boolean expression must contain only T or F values!"
 
 
+class ComparisonError(ProgramError):
+    message = "The comparison operator for the given arguments is not defined!"
+
+
 
 
