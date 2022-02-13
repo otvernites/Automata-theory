@@ -277,12 +277,21 @@ class Parser:
         """log_type : TRUE
                     | FALSE
                     | call
+                    | comparison
+                    | identification
+                    | robot
         """
 
         if (p[1] is not True) and (p[1] is not False):
             p[0] = p[1]
         else:
             p[0] = Node('log_type', value=p[1], lineno=p.lineno(1))
+
+    def p_log_type_error(self, p):
+        '''log_type : error'''
+        self.error = True
+        sys.stderr.write(f'Invalid logical operation: "{p[1].value}" at {p[1].lineno}:{p[1].lexpos}\n')
+        p[0] = Node('error', value="logic type error", children=[p[1]], lineno=p.lineno(1))
 
     def p_logic_expr(self, p):
         """logic_expr : logic_expr DASH log_type
@@ -292,6 +301,18 @@ class Parser:
             p[0] = Node('logic_expr', children=[p[1], p[3]], lineno=p.lineno(1))
         else:
             p[0] = p[1]
+
+    def p_logic_expr_error(self, p):
+        """logic_expr : error DASH log_type
+                      | logic_expr DASH error
+                      | error
+        """
+        self.error = True
+        sys.stderr.write(f'Invalid logical operation at {p[1].lineno}\n')
+        if len(p) == 4:
+            p[0] = Node('error', value="logic expr error", children=[p[1],p[3]], lineno=p.lineno(1))
+        elif len(p) == 2:
+            p[0] = Node('error', value="logic expr error", children=[p[1]], lineno=p.lineno(1))
 
     def p_logics(self, p):
         """logics : NOR logic_expr
@@ -354,14 +375,14 @@ class Parser:
     # сycle operations
     def p_cycle(self, p):
         """cycle : LPAREN logics RPAREN LBRACE NL statement_block RBRACE
-                 | LPAREN logic_expr RPAREN LBRACE NL statement_block RBRACE
+                 | LPAREN log_type RPAREN LBRACE NL statement_block RBRACE
         """
         p[0] = Node('cycle', children=[p[2],p[6]], lineno=p.lineno(1))
 
     def p_cycle_error(self, p):
         """cycle : LPAREN error RPAREN LBRACE NL statement_block RBRACE
                  | LPAREN logics RPAREN LBRACE NL error RBRACE
-                 | LPAREN logic_expr RPAREN LBRACE NL error RBRACE
+                 | LPAREN log_type RPAREN LBRACE NL error RBRACE
         """
         self.error = True
         sys.stderr.write(f'Invalid cycle at {p[2].lineno}\n')
@@ -371,9 +392,9 @@ class Parser:
     # отслеживать что var_call_id вызывает именно метку
     def p_conditionals(self, p):
         """conditionals : LBRACKET logics RBRACKET GOTO var_call_id
-                        | LBRACKET logic_expr RBRACKET GOTO var_call_id
+                        | LBRACKET log_type RBRACKET GOTO var_call_id
                         | LBRACKET logics RBRACKET var_call_id
-                        | LBRACKET logic_expr RBRACKET var_call_id
+                        | LBRACKET log_type RBRACKET var_call_id
                         | GOTO var_call_id
                         | var_call_id
         """
@@ -384,10 +405,12 @@ class Parser:
         elif len(p) == 3:
             p[0] = Node('conditionals', children=[p[2]], lineno=p.lineno(1))
         elif len(p) == 2 and self.declaration.get(p[1].value):
-            if self.declaration.get(p[1].value).type == "label":
-                p[0] = Node('conditionals', children=[p[1]], lineno=p.lineno(1))
-            else:
-                p[0] = Node('identifier', children=[p[1]], lineno=p.lineno(1))
+            p[0] = Node('conditionals', children=[p[1]], lineno=p.lineno(1))
+        elif len(p) == 2:
+            p[0] = Node('conditionals', children=[p[1]], lineno=p.lineno(1))
+            var = Variable("label", int(p[1].value))
+            self.declaration[var.name] = var
+
 
     def p_conditionals_error(self, p):
         """conditionals : LBRACKET error RBRACKET GOTO var_call_id
@@ -451,6 +474,11 @@ class Parser:
                  | RIGHT
                  | LEFT
                  | TP
+                 | ATTEMPTS
+                 | SLEFT
+                 | SRIGHT
+                 | SBACK
+                 | SFORWARD
         """
         p[0] = Node('robot', value=p[1], lineno=p.lineno(1))
 

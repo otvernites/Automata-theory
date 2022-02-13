@@ -1,5 +1,5 @@
 class ProgramError(Exception):
-    message = "An unknown exception occurred"
+    message = "An unknown exception occurred..."
 
     def __init__(self):
         super(ProgramError, self).__init__()
@@ -63,6 +63,22 @@ class NotBooleanVariable(ProgramError):
 
 class ComparisonError(ProgramError):
     message = "The comparison operator for the given arguments is not defined!"
+
+
+class ProcedureError(ProgramError):
+    message = "Procedure execution error!"
+
+
+class CycleError(ProgramError):
+    message = "Condition error in loop!"
+
+
+class LabelError(ProgramError):
+    message = "Incorrect label call!"
+
+
+class InputError(ProgramError):
+    message = "Incorrect map data!"
 
 
 

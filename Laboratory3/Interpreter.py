@@ -1,24 +1,36 @@
+import sys
+sys.setrecursionlimit(10000)
 import numpy as np
 from multipledispatch import dispatch
 import sys
 from Errors import *
 from Parser.Parser import Parser
 from Parser.SyntaxTree import Node
+from Robot.Robot import Robot
 from Variable import Variable, Array
 
 
 class Interpreter:
 
-    def __init__(self, parser=Parser()):
+    def __init__(self, parser=Parser(), robot=None):
         self.parser = parser
         self.root = None
-        self.program = None
         self.symbol_table = dict()  # здесь все переменные, метки (int - разная информация)
         self.declaration = dict()  # процедуры, массивы процедур и метки (int - node или variable/array)
         self.id_table = dict()  # переменная - список связанных процедур (int-list)
 
-    def processing(self, program=None):
+        self.program = None
+        self.robot = robot
+
+        self.current_cycle = None
+        self.current_proc = None
+        self.current_label = None
+        self.tmp_variables = []
+        self.exit = False
+
+    def processing(self, program=None, robot=None):
         self.program = program
+        self.robot = robot
         self.root, self.declaration, error = self.parser.parse(self.program)
 
         """
@@ -35,10 +47,22 @@ class Interpreter:
             try:
                 self.interpreter(self.root)
                 return 0
+            except RecursionError:
+                print("Recursion error!")
             except Exception:
                 raise
 
     def interpreter(self, node):
+        """
+        if self.exit or isinstance(self.exit, Node) and self.exit != node:
+            return
+        elif isinstance(self.exit, Node) and self.exit == node:
+            self.exit = False
+        """
+
+        if self.exit:
+            return
+
         if isinstance(node, list):
             node = node[0]
         # дефолт (ошибка)
@@ -52,18 +76,28 @@ class Interpreter:
 
         # блок выражений
         elif node.type == "statement_block":
+            """
+            if node is self.current_label:  # label call
+                return
+            """
+
             for child in node.children:
                 res = self.interpreter(child)
                 if res is not True and res is not False and isinstance(res, int):
-                    self.declaration[res] = node
-                    self.symbol_table[res].value = node
+                    self.declaration[res] = (node, self.current_proc)  # label decl
+                    self.symbol_table[res].value = (node, self.current_proc)
 
         # выражение языка
         elif node.type == "statement":
+            """
+            if node is self.current_label:  # label call
+                return
+            """
+
             res = self.interpreter(node.children)
             if res is not True and res is not False and isinstance(res, int):
-                self.declaration[res] = node
-                self.symbol_table[res].value = node
+                self.declaration[res] = (node, self.current_proc)
+                self.symbol_table[res].value = (node, self.current_proc)
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ таблица символов и процедур
 
@@ -79,11 +113,16 @@ class Interpreter:
             if not (node.value in self.parser.declaration.keys()):
                 self.parser.declaration[var.name] = var
 
+            """
             if self.find_duplicate(node.value):
-
                 self.symbol_table[var.name] = var
             else:
                 raise VariableAlreadyExists
+            """
+            self.symbol_table[var.name] = var
+
+            if self.current_proc is not None:
+                self.tmp_variables.append(var.name)
             return var.name
 
         # ,2
@@ -94,6 +133,9 @@ class Interpreter:
             else:
                 raise VariableAlreadyExists
 
+            if self.current_proc is not None:
+                self.tmp_variables.append(var.name)
+
         # .3
         elif node.type == "bool_var":
             if self.find_duplicate(node.value):
@@ -102,9 +144,11 @@ class Interpreter:
             else:
                 raise VariableAlreadyExists
 
+            if self.current_proc is not None:
+                self.tmp_variables.append(var.name)
+
         # $4
         elif node.type == "procedure":
-
             var = Variable("proc", node.value)
             var.value = "np"
 
@@ -117,10 +161,12 @@ class Interpreter:
             else:
                 raise VariableAlreadyExists
 
+            if self.current_proc is not None:
+                self.tmp_variables.append(var.name)
+
         # ARRAYS
         # $3:[то же, что и выше]
         elif node.type == "proc_arr_var":
-
             var = Array("proc_arr", node.value)
 
             if not (node.value in self.parser.declaration.keys()):
@@ -134,6 +180,9 @@ class Interpreter:
             self.array_indexes(node, 0)
             self.parser.declaration[var.name].size = self.symbol_table[var.name].size
 
+            if self.current_proc is not None:
+                self.tmp_variables.append(var.name)
+
         # ,3:[то же, что и выше]
         elif node.type == "int_arr_var":
             var = Array("int_arr", node.value)
@@ -144,6 +193,9 @@ class Interpreter:
                 raise VariableAlreadyExists
 
             self.array_indexes(node, 0)
+
+            if self.current_proc is not None:
+                self.tmp_variables.append(var.name)
 
         # .3:[то же, что и выше]
         elif node.type == "bool_arr_var":
@@ -156,6 +208,9 @@ class Interpreter:
 
             self.array_indexes(node, 0)
 
+            if self.current_proc is not None:
+                self.tmp_variables.append(var.name)
+
         # np
         elif node.type == "pass":
             pass
@@ -165,7 +220,22 @@ class Interpreter:
             if self.find_duplicate(node.value):  # если такая не существует
                 raise NonExistentVariable
 
-        # elif node.type == "identifier":  <- аналогично var_call
+            if self.id_table.get(node.value) is not None:
+                proc_list = self.id_table[node.value]
+                for proc in proc_list:
+                    action = self.procedure_call_chain(proc.name)
+                    if action == "np":
+                        pass
+                    elif type(action) is Node:
+                        self.current_proc = proc.name
+                        self.interpreter(action)
+                        self.exit = False
+                        self.current_proc = None
+                        for tmp_var in self.tmp_variables:
+                            del self.symbol_table[tmp_var]
+                        self.tmp_variables.clear()
+                    else:
+                        raise ProcedureError
 
         # 7:[3,] | 7:[6] | 7:[8:[2]]
         elif node.type == "arr_call":  # если это вызов
@@ -180,18 +250,13 @@ class Interpreter:
         #  .#5
         # }
         elif node.type == "assignment":
+            # если присваиваем инструкции процедуре (временные переменные не создаем)
             self.assign(node)
-
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ for identification
 
         # .3 @ 4 | 3 @ 4 | .4 % 3 | 3 % 3
         elif node.type == "identification":
             return self.id_processing(node)
-
-        # 1 2 3
-        # elif node.type == "identifier":
-        #    #return self.id_processing(node)
-        #    self.id_processing(node)
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ for math
 
@@ -208,15 +273,51 @@ class Interpreter:
         # [F]  6
         # please 6
         # 6
-        # elif node.type == "conditionals":
-        #    if len(node.children) == 1:
+        elif node.type == "conditionals":  # вызов метки
+            if len(node.children) == 2:  # метка c условием
+                # левое значение
+                log_value = None
+                child = node.children[0]
+
+                if child.type == "logics" or child.type == "log_type" or child.type == "comparison" or \
+                        child.type == "identification" or child.type == "robot":
+                    log_value = self.interpreter(child)
+                elif child.type == "var_call":
+                    self.interpreter(child)  # id
+                    if self.symbol_table.get(child.value) is None:
+                        raise NonExistentVariable
+                    if self.symbol_table[child.value].type == "bool":
+                        log_value = self.symbol_table[child.value].value
+                elif child.type == "arr_call":
+                    if self.symbol_table.get(child.value) is None:
+                        raise NonExistentVariable
+                    indices = self.interpreter(child)
+                    if self.symbol_table[child.value].type == "bool_arr":
+                        log_value = self.get_array_value(self.symbol_table[child.value], indices)
+                elif child.type == "literal":
+                    log_value = child.value
+                else:
+                    raise LabelError
+
+                if log_value is True:
+                    self.label_jump(node.children[1])
+                elif log_value is False:
+                    #self.label_jump(node.children[1])
+                    self.current_label = None
+                    return
+                else:
+                    raise LabelError
+            else:  # метка без условия
+                self.label_jump(node.children)
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ for logics
-        # .#T:F:7:[3,] ?????????????????????????????????????????????????????????????
+        # .#T-F-7:[3,]
         elif node.type == "logics":
             bool_values = []
             for child in node.children:
-                bool_values = bool_values + self.interpreter(child)
+                res = self.interpreter(child)
+                bool_values = bool_values + res if isinstance(res, list) \
+                                                            else bool_values + [res]
 
             iter_count = len(bool_values) - 1
             if iter_count <= 0:
@@ -227,7 +328,7 @@ class Interpreter:
                 last_value = self.pier_arrow(last_value, bool_values[i])
             return last_value
 
-        # разные комбинации log_type через двоеточие T:F:T
+        # разные комбинации log_type T-F-T
         elif node.type == "logic_expr":
 
             bool_list = []
@@ -236,6 +337,8 @@ class Interpreter:
 
                 if child.type == "logic_expr":
                     bool_list = bool_list + self.interpreter(child)
+                elif child.type == "comparison" or child.type == "identification" or child.type == "robot":
+                    bool_list.append(self.interpreter(child))
                 elif child.type == "log_type":
                     bool_list.append(self.interpreter(child))
                 elif self.symbol_table.get(child.value) is not None:
@@ -246,6 +349,7 @@ class Interpreter:
                         else:
                             raise NotBooleanVariable
                     elif child.type == "var_call":
+                        self.interpreter(child)  # id
                         var = self.symbol_table[child.value]
                         if var.type == "bool":
                             bool_list = bool_list + [var.value]
@@ -277,41 +381,61 @@ class Interpreter:
         elif node.type == "comparison":
             return self.compare(node)
 
-    """
-    
-        # (1,) | 1, | T | F | -1,
-    elif node.type == "literal":
-    
-    # 7:[8:[2] 6, 2] (см индексы)
-    elif node.type == "id_list":
-    
-    # 7:[3,] | 7:[6] | 7:[8:[2]] (см индексы)
-    elif node.type == "id":
-    
+        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ for cycle
 
-    
+        # (.#T) {
+        #   statement
+        #   statement
+        # }
+        #
+        # (T) {
+        #   statement
+        #   statement
+        # }
+        elif node.type == "cycle":
+            self.current_cycle = node
 
-    
+            while self.check_cycle(node.children[0]):
+                self.interpreter(node.children[1])
+                self.exit = False
 
-    
-    # (.#T) {
-    #   statement
-    #   statement
-    # }
-    #
-    # (T) {
-    #   statement
-    #   statement
-    # }
-    elif node.type == "cycle":
-                
-    # mf mb mr ml tp
-    elif node.type == "robot":
-    
-    # enter
-    elif node.type == "empty":
-    
-    """
+            log_value = self.check_cycle(node.children[0])
+            if log_value is False:
+                self.current_cycle = None
+                return
+            else:
+                raise CycleError
+
+
+        # mf mb mr ml tp
+        elif node.type == "robot":
+            if node.value == "mf":
+                return self.robot.move_forward()
+            if node.value == "mb":
+                return self.robot.move_back()
+            if node.value == "mr":
+                return self.robot.move_right()
+            if node.value == "ml":
+                return self.robot.move_left()
+            if node.value == "tp":
+                return self.robot.teleport()
+            if node.value == "tp?":
+                print(robot.tp_skill)
+                if self.robot.tp_skill:
+                    return True
+                else:
+                    return False
+            if node.value == "sf":
+                return self.robot.step_forward()
+            if node.value == "sb":
+                return self.robot.step_back()
+            if node.value == "sr":
+                return self.robot.step_right()
+            if node.value == "sl":
+                return self.robot.step_left()
+
+
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~additional~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ for declaration
     def array_indexes(self, node, flag):
@@ -345,6 +469,8 @@ class Interpreter:
                 raise ErrorIndexes
 
             if leaf.type == "var_call":
+
+                self.interpreter(leaf)  # id
                 id = leaf.value
 
                 if self.find_duplicate(id):  # если обращаемся к несуществующей переменной
@@ -494,11 +620,10 @@ class Interpreter:
                 if (l_type == "proc" or l_type == "proc_arr") and (r_type == "proc" or r_type == "proc_arr"):
                     self.assign_for_procedure(node)
                     return
-            else:
-                raise NonExistentVariable
+
 
         left_child = node.children[0]
-        l_indexes = self.interpreter(left_child)  # если слева - вызов массива
+        l_indexes = self.interpreter(left_child)  # если слева - вызов массива # id
         r_value = None
 
         # чтоб не выполнялась процедура
@@ -513,6 +638,7 @@ class Interpreter:
                 r_value = right.value if isinstance(right, Node) else right
 
             elif node.children[1].type == "var_call":  # если переменная
+                self.interpreter(node.children[1])  # id
                 right = self.symbol_table.get(node.children[1].value)
                 if right is not None:
                     r_value = right.value
@@ -535,7 +661,8 @@ class Interpreter:
             is_num = lambda x: x.isdigit() if x[:1] != '-' else x[1:].isdigit()
             #  int bool  int_arr bool_arr = const или когда переменная справа -  возвращает значение T или F
             if (((type == "int" or type == "int_arr") and is_num(r_value)) or
-                    ((type == "bool" or type == "bool_arr") and (r_value is True or r_value is False))):
+                    ((type == "bool" or type == "bool_arr") and
+                     (r_value is True or r_value is False or r_value == "True" or r_value == "False"))):
                 if type == "int" or type == "bool":
                     self.symbol_table[id].value = r_value
                     return
@@ -548,6 +675,7 @@ class Interpreter:
                 if node.children[1].type == "statement_block" or node.children[1].type == "statement":
                     self.declaration[id] = node.children[1]
                     self.symbol_table[id].value = node.children[1]
+                    return
                 else:
                     raise AssignmentErrorRight
             else:
@@ -608,11 +736,12 @@ class Interpreter:
     def assign_for_procedure(self, node):
 
         left_child = node.children[0]
-        l_indexes = self.interpreter(left_child)  # если слева - вызов массива
+        l_indexes = self.interpreter(left_child)  # если слева - вызов массива # id
         id = int(left_child.value)  # имя переменной
         type = self.declaration[id].type
 
         if node.children[1].type != "arr_call":  # если переменная
+            self.interpreter(node.children[1])  # id
             r_value = self.symbol_table[node.children[1].value]
         else:  # если массив
             right = self.interpreter(node.children[1])  # indexes
@@ -718,15 +847,48 @@ class Interpreter:
                 res = self.recursive_linking_check(id, p)
         return res
 
+    def procedure_call_chain(self, proc_name):
+        action = self.declaration[proc_name]
+        if isinstance(action, tuple):
+            action = action[0]
+        while not (type(action) is Node or proc_name == action.name):
+            self.procedure_call_chain(action.name)
+        if type(action) is not Node and proc_name == action.name:
+            return action.value  # np
+        else:
+            return action
+
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ for math operation
     def math(self, node, flag):
+        # id
+        if self.id_table.get(int(node.value)) is not None:
+            proc_list = self.id_table[int(node.value)]
+            for proc in proc_list:
+                action = self.procedure_call_chain(proc.name)
+                if action == "np":
+                    pass
+                elif type(action) is Node:
+                    self.current_proc = proc.name
+                    self.interpreter(action)
+                    self.exit = False
+                    self.current_proc = None
+                    for tmp_var in self.tmp_variables:
+                        del self.symbol_table[tmp_var]
+                    self.tmp_variables.clear()
+                else:
+                    raise ProcedureError
+
         variable = self.symbol_table.get(int(node.value))
+
 
         if variable is None:
             raise NonExistentVariable
 
         if variable.type != "int":
             raise ArithmeticError
+
+        if variable.value is None:
+            raise UninitializedVariable
 
         if flag == 0:
             self.symbol_table[variable.name].value = str(int(variable.value) - 1)
@@ -751,9 +913,11 @@ class Interpreter:
                 if child.type == "incr" or child.type == "decr":
                     self.interpreter(child)
                     return_values.append(self.symbol_table[int(child.value)].value)
-                elif child.type == "logics" or child.type == "log_type":
+                elif child.type == "logics" or child.type == "log_type" or child.type == "comparison" or \
+                        child.type == "identification" or child.type == "robot":
                     return_values.append(self.interpreter(child))
                 elif child.type == "var_call":
+                    self.interpreter(child)  # id
                     if self.symbol_table.get(child.value) is None:
                         raise NonExistentVariable
                     return_values.append(self.symbol_table[child.value].value)
@@ -780,74 +944,138 @@ class Interpreter:
 
         return return_values[0] == return_values[1]
 
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ for label
+    def label_jump(self, node):
+
+        if isinstance(node, list):
+            node = node[0]
+
+        if self.declaration.get(node.value) is None:
+            raise NonExistentVariable
+
+        if isinstance(self.declaration[node.value], tuple) or self.declaration[
+            node.value].value is not None:  # уже объявлена (а-ля statement_label_decl, name_curr_proc)
+            decl_proc = self.declaration[int(node.value)][1]
+            if decl_proc != self.current_proc:
+                raise LabelError
+
+            self.current_label = self.declaration[int(node.value)][0]
+            leaf_label = None
+            for child in self.current_label.children:
+                if child.type == "declaration":
+                    leaf_label = child.children[0]
+
+            if decl_proc is None and self.current_cycle is None:  # нет процедуры
+                #self.interpreter(self.root)
+                self.exit = True
+                self.interpreter_shell(self.root, leaf_label)
+                self.exit = True
+            elif decl_proc and self.current_cycle is None:
+                self.exit = True
+                self.interpreter_shell(self.procedure_call_chain(decl_proc), leaf_label)
+                self.exit = True
+            elif decl_proc is None and self.current_cycle:
+                self.exit = True
+                self.interpreter_shell(self.current_cycle, leaf_label)
+                self.exit = True
+
+        else:  # вызвана раньше объявления
+            self.find_label_declaration(node.value, self.root, self.current_proc)
+            self.label_jump(node)
+            """
+            if self.current_proc is not None:
+                self.exit = self.procedure_call_chain(self.current_proc)
+            else:
+                self.exit = self.root
+            return
+            """
+
+    def find_label_declaration(self, label_name, root, curr_proc):
+        statement_node = []  # узел объявления
+
+        def _find_label_declaration(label_name, node, curr_proc):
+            if not node:
+                return 0
+            if isinstance(node, str):
+                return 0
+            elif node.type == "statement" or node.type == "statement_block":
+                for child in node.children:
+                    if child.type == "declaration":
+                        for c in child.children:
+                            if c.value == label_name:
+                                statement_node.append(node)
+                                return 1
+            for child in node.children:
+                if _find_label_declaration(label_name, child, curr_proc):
+                    return 1
+
+        _find_label_declaration(label_name, root, curr_proc)
+
+        if len(statement_node) == 0:
+            raise LabelError
+
+        statement_node = statement_node[0]
+
+        self.declaration[int(label_name)] = (statement_node, curr_proc)
+        self.symbol_table[int(label_name)] = (statement_node, curr_proc)
+
+        return
+
+    def interpreter_shell(self, node, leaf_label):
+        if self.exit is True:
+            self.bypass(node, leaf_label)
+        else:
+            self.interpreter(node)
+
+    def bypass(self, node, leaf_label):
+        if not node:
+            return
+        if isinstance(node, str):
+            return
+        elif node == leaf_label:
+            self.exit = False
+            return
+
+        for child in node.children:
+            if self.interpreter_shell(child, leaf_label):
+                return
+
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ for cycle
+    def check_cycle(self, child):
+        # вычисляю левое значение
+        log_value = None
+
+        if child.type == "logics" or child.type == "log_type" or child.type == "comparison" or \
+                child.type == "identification" or child.type == "robot":
+            log_value = self.interpreter(child)
+        elif child.type == "var_call":
+            self.interpreter(child)  # id
+            if self.symbol_table.get(child.value) is None:
+                raise NonExistentVariable
+            if self.symbol_table[child.value].type == "bool":
+                log_value = self.symbol_table[child.value].value
+        elif child.type == "arr_call":
+            if self.symbol_table.get(child.value) is None:
+                raise NonExistentVariable
+            indices = self.interpreter(child)
+            if self.symbol_table[child.value].type == "bool_arr":
+                log_value = self.get_array_value(self.symbol_table[child.value], indices)
+        elif child.type == "literal":
+            log_value = child.value
+        else:
+            raise CycleError
+
+        return log_value
+
+
 
 if __name__ == '__main__':
-    s = """    $1
-                $2
-                $3
-                $10
-                .4<-1 @ 2
-                .5<-2 @ 3
-                .6<-3 @ 1
-                .7<-2 @ 3
-                .8<-1 % 10
-                .9<-1 % 2
-        """
+    s = open("bypass1.txt", "r")
+    #s = open("Tests/TEST_var_already_exist.txt", "r")
     it = Interpreter()
-    it.processing(s)
 
-"""
+    robot = Robot("Robot/Maps/map2.txt")
+    it.processing(s.read(), robot)
+    print(robot.memorized_path)
+    robot.vizualize()
 
-# написать все тонкости и нюансы
-# создать таблицу символов
-# при использовании переменных проверять, что они уже были созданы (если это не объявление). тип можно ,3<-5,
-# если объявление, то все ок
-# глобальной области видимости нет, таблица символов и процедур одна на всю программу
-#
-# ПРОЦЕДУРА: не возвращает значение (т.е. все новые переменные остаются внутри, лучше в таблицу символов их не вносить)
-#   -> что делать с (обмен данными с процедурой осуществляется через переменные)
-#   -> процедура используется используется только в assignment и в связывании
-#   -> по метке нельзя переходить из процедуры, по метке нельзя заходить в процедуру
-#   -> по умолчанию инициализируется np
-# ЦЕЛОЧИСЛ. МАССИВ: индекс по умолчанию - 0
-#   -> в качестве индексов могут использоваться целочисленные литералы, целочисленные переменные и элементы массивов
-#   (допускается любой уровень вложенности и рекурсии);
-#   -> память под элементы массива выделяется при первом обращении к соответствующему элементу
-# ЛОГИЧ. МАССИВ: индекс по умолчанию - 0
-#    -> в качестве индексов могут использоваться целочисленные литералы, целочисленные переменные и элементы массивов
-#    (допускается любой уровень вложенности и рекурсии);
-#    -> память под элементы массива выделяется при первом обращении к соответствующему элементу
-# МАССИВ ПРОЦЕДУР: индекс по умолчанию - 0
-#     -> в качестве индексов могут использоваться целочисленные литералы, целочисленные переменные и элементы массивов
-#     (допускается любой уровень вложенности и рекурсии);
-#     -> память под элементы массива выделяется при первом обращении к соответствующему элементу
-# Номера целочисленной и логической переменной, массивов и процедур + МЕТОК в пределах одной программы
-#   совпадать не могут !!!! (так что в парсере сделать ошибку при добавлении такого же обявления процедуры)
-# АРИФМ ОПЕРАТОРЫ: переменная должна быть целочисленная
-# ПРИСВАИВАНИЕ ДЛЯ ПРОЦЕДУР:
-#           <имя процедуры><-<имя процедуры или элемент массива процедур>;
-#           <имя процедуры><-{<предложения языка>};
-#           при присвоении процедур ни присваиваемый код, ни сама процедура не выполняется.
-# ЛОГИЧЕСКИЕ ОПЕРАТОРЫ: внутри логическое выражение
-# ОПЕР. СРАВНЕНИЯ: арифм выраж-арифм конст, логич выраж-логич конст, переменная процедура-np
-# ОПЕР. ЦИКЛА: в условии логич выражение!
-# ОПЕР. УСЛ. ПЕРЕХОДА: в условии логич выражение и вызов существующей метки
-# СВЯЗЫВАНИЕ ИДЕНТИФИКАТОРОВ С ПРОЦЕДУРАМИ:
-#   -> Идентификатор - любая переменная, в том числе процедура; рекурсивное связывание не допускается,
-#   при попытке связывания, которое образует рекурсию, оператор не выполняется, и возвращает F, иначе возвращает T;
-#   -> При обращении к связанному идентификатору сначала вызывается связанная с ним процедура,
-#   затем возвращается значение идентификатора (возможно модифицированное связанной процедурой);
-#   -> C идентификатором может быть связано несколько процедур;
-#   -> Процедура может быть связана с несколькими идентификаторами;
-# РАЗРЫВ СВЯЗИ:
-#   -> Если оператор вызывается не для связанных ранее переменных, то ничего не происходит;
-#      в любом случае возвращается значение T
-# ПЕРЕМЕЩЕНИЕ РОБОТА:
-#   -> Перемещается на одну клетку в заданном направлении от-но текущего. Если оператор невозможно выполнить
-#      из-за наличия препятствия, он возвращает логическое значение F. Иначе – T.
-# ТЕЛЕПОРТАЦИЯ РОБОТА:
-#   -> Телепортируется в случайную, еще не посещенную им клетку лабиринта
-#   -> робот имеет ограниченное количество попыток телепортации, определяемой средой выполнения;
-#   -> при успешной телепортации возвращается T, иначе F; после телепортации робот не знает свое местоположение.
-# где-то там был еще пример с двумя двоеточиями
-"""

@@ -6,7 +6,8 @@ import sys
 reserved = {
     ',#': 'INCR', ',*': 'DECR', '<-': 'ASSIGN', '.#': 'NOR', 'eq': 'EQ', 'please': 'GOTO',
     'np': 'PASS', '@': 'LINK', '%': 'LINK_BREAK', 'mf': 'FORWARD', 'mb': 'BACK',
-    'mr': 'RIGHT', 'ml': 'LEFT', 'tp': 'TP'
+    'mr': 'RIGHT', 'ml': 'LEFT', 'tp': 'TP',
+    'tp?': 'ATTEMPTS', 'sl': 'SLEFT', 'sr': 'SRIGHT', 'sf': 'SFORWARD', 'sb': 'SBACK'
 }
 
 
@@ -159,6 +160,26 @@ class Lexer:
 
     def t_LEFT(self, t):
         r'ml(?!\w)'
+        return t
+
+    def t_SFORWARD(self, t):
+        r'sf(?!\w)'
+        return t
+
+    def t_SBACK(self, t):
+        r'sb(?!\w)'
+        return t
+
+    def t_SRIGHT(self, t):
+        r'sr(?!\w)'
+        return t
+
+    def t_SLEFT(self, t):
+        r'sl(?!\w)'
+        return t
+
+    def t_ATTEMPTS(self, t):
+        r'tp\?(?!\w)'
         return t
 
     def t_TP(self, t):
